@@ -1,0 +1,113 @@
+/* === Global Reset & Fonts === */
+
+/* === Card Titles === */
+h2 {
+  font-size: 1.5rem;
+  margin-bottom: 15px;
+  color: #1e293b;
+}
+
+/* === Forms === */
+form {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+.user-login-form, .role-change-form, .upload-page{
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+input[type="email"],
+input[type="text"],
+input[type="password"],
+input {
+  padding: 12px;
+  font-size: 1rem;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  transition: border 0.3s;
+}
+
+input:focus {
+  border-color: #2563eb;
+  outline: none;
+}
+
+/* === Buttons === */
+button {
+  background: #2563eb;
+  color: white;
+  padding: 12px;
+  font-size: 1rem;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.3s;
+}
+
+button:hover {
+  background: #1d4ed8;
+}
+
+/* === Upload Page === */
+.upload-page h2 {
+  margin-bottom: 20px;
+}
+
+/* === File Uploader Component === */
+.file-uploader {
+  border: 2px dashed #ccc;
+  padding: 20px;
+  border-radius: 8px;
+  text-align: center;
+  background: #f1f5f9;
+  cursor: pointer;
+  transition: border-color 0.3s;
+}
+
+.file-uploader:hover {
+  border-color: #2563eb;
+}
+
+/* === Mobile Responsive === */
+@media (max-width: 768px) {
+  .dashboard-container {
+    flex-direction: column;
+    background-color: whitesmoke;
+    height: 100vh;
+  
+  }
+
+  .dashboard-sidebar {
+    width: 100%;
+    padding: 10px;
+    text-align: center;
+  }
+
+  .dashboard-main {
+    padding: 10px;
+  }
+
+  form {
+    gap: 10px;
+  }
+
+  button {
+    font-size: 0.9rem;
+    padding: 10px;
+  }
+}
+
+@media (max-width: 480px) {
+  h2 {
+    font-size: 1.2rem;
+  }
+
+  input,
+  button {
+    font-size: 0.85rem;
+    padding: 8px;
+  }
+}

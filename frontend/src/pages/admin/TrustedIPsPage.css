@@ -1,0 +1,140 @@
+*{
+  box-sizing: border-box;
+}
+
+.trusted-container {
+  max-width: 900px;
+  margin: 20px auto;
+  padding: 20px;
+  font-family: Arial, sans-serif;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  background-color: #fafafa;
+}
+
+h2 {
+  text-align: center;
+  color: #333;
+  margin-bottom: 20px;
+}
+
+/* Form Layout */
+.trusted-form {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+  margin-bottom: 20px;
+}
+
+.form-row {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.form-row label {
+  font-weight: bold;
+  min-width: 140px;
+}
+
+.form-row input {
+  flex: 1;
+  min-width: 100px;
+  padding: 8px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+}
+
+.form-row span {
+  font-weight: bold;
+  padding: 0 5px;
+}
+
+.add-btn {
+  align-self: flex-start;
+  padding: 8px 14px;
+  background-color: #007bff;
+  border: none;
+  color: white;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.add-btn:hover {
+  background-color: #0056b3;
+}
+
+/* Table Layout */
+.trusted-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.trusted-table th,
+.trusted-table td {
+  border: 1px solid #ddd;
+  padding: 10px;
+  text-align: left;
+}
+
+.trusted-table th {
+  background-color: #f0f0f0;
+}
+
+.remove-btn {
+  background-color: #dc3545;
+  padding: 6px 12px;
+  border: none;
+  color: white;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.remove-btn:hover {
+  background-color: #c82333;
+}
+
+/* Mobile Responsive */
+@media (max-width: 768px) {
+  .form-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .form-row label {
+    min-width: unset;
+  }
+
+  .trusted-table {
+    display: block;
+    overflow-x: auto;
+    white-space: nowrap;
+  }
+
+  .trusted-table thead {
+    display: none;
+  }
+
+  .trusted-table tr {
+    display: block;
+    margin-bottom: 10px;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    background-color: white;
+    padding: 10px;
+  }
+
+  .trusted-table td {
+    display: flex;
+    justify-content: space-between;
+    padding: 8px 5px;
+    border: none;
+  }
+
+  .trusted-table td::before {
+    content: attr(data-label);
+    font-weight: bold;
+    color: #555;
+  }
+}

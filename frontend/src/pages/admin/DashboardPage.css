@@ -1,0 +1,86 @@
+/* ===== General Layout ===== */
+.dashboard-container {
+  display: flex;
+  height: 97vh;
+  font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+  background-color: whitesmoke;
+  overflow: hidden;
+  padding: 0px;
+
+}
+
+/* ===== Sidebar Layout ===== */
+.dashboard-sidebar {
+  flex: 20%;
+  background-color: #0077cc;
+}
+
+/* ===== Main Content Layout ===== */
+.dashboard-main {
+  flex: 80%;
+  background-color: whitesmoke;
+  /* height: 100%; */
+}
+
+.main-content {
+  padding: 20px;
+  overflow-y: auto;
+  height: 100%;
+}
+
+.main-content h1 {
+  color: #0077cc;
+  margin-bottom: 20px;
+}
+
+/* ===== Card Style ===== */
+.card {
+  background-color: white;
+  border-radius: 8px;
+  padding: 20px;
+  margin-bottom: 20px;
+  box-shadow: 0px 4px 8px rgba(0, 0, 0, 0.05);
+}
+
+.card h3 {
+  margin-bottom: 10px;
+  color: #333;
+}
+
+.card p {
+  color: #555;
+  line-height: 1.5;
+}
+
+/* ===== Scrollbar Style ===== */
+/* .main-content::-webkit-scrollbar {
+  width: 8px;
+}
+
+.main-content::-webkit-scrollbar-thumb {
+  background-color: #0077cc;
+  border-radius: 4px;
+}
+
+.main-content::-webkit-scrollbar-track {
+  background-color: #e1e4e8;
+} */
+
+/* ===== Mobile Responsive ===== */
+@media (max-width: 768px) {
+  .dashboard-container {
+    flex-direction: column; /* Stack sidebar on top */
+    height: auto;
+  }
+
+  .dashboard-sidebar {
+    flex: none;
+    width: 100%;
+  }
+
+  .dashboard-main {
+    flex: none;
+    width: 100%;
+    height: 100% !important;
+  }
+}

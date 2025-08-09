@@ -1,0 +1,72 @@
+.incidents-container {
+  max-width: 1000px;
+  margin: 20px auto;
+  padding: 20px;
+  font-family: Arial, sans-serif;
+}
+
+.incidents-container h2 {
+  text-align: center;
+  margin-bottom: 20px;
+  color: #222;
+}
+
+.incident-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 16px;
+}
+
+.no-incidents {
+  text-align: center;
+  padding: 20px;
+  font-size: 1rem;
+  color: #666;
+}
+
+/* Card style for IncidentCard component */
+.incident-card {
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  background-color: white;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
+  padding: 15px;
+  transition: transform 0.2s ease-in-out;
+}
+
+.incident-card:hover {
+  transform: translateY(-2px);
+}
+
+.incident-header {
+  font-weight: bold;
+  font-size: 1.1rem;
+  margin-bottom: 8px;
+}
+
+.incident-meta {
+  font-size: 0.85rem;
+  color: #777;
+  margin-bottom: 8px;
+}
+
+.incident-details {
+  font-size: 0.95rem;
+  color: #444;
+}
+
+/* Mobile responsive */
+@media (max-width: 600px) {
+  .incidents-container {
+    padding: 10px;
+  }
+
+  .incident-list {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .incident-card {
+    padding: 12px;
+  }
+}
