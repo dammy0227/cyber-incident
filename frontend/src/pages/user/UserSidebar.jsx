@@ -29,7 +29,7 @@ const UserSidebar = ({ activeTab, onTabChange }) => {
         </li>
 
         {/* Switch to Admin Dashboard */}
-        <li onClick={() => navigate("/admin/dashboard")} className="switch-link">
+        <li onClick={() => navigate("/admin/login")} className="switch-link">
           <FaShieldAlt style={{ marginRight: "8px" }} />
           Switch to Admin View
         </li>
