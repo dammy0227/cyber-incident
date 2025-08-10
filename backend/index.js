@@ -18,8 +18,14 @@ dotenv.config();
 const app = express();
 const server = http.createServer(app); // ✅ Create HTTP server for Socket.IO
 
+app.use(cors({
+  origin: ['https://your-frontend-domain.com', 'http://localhost:5173'], // replace with your domains
+  credentials: true,
+}));
+
+
 // Middleware
-app.use(cors());
+
 app.use(express.json()); // For parsing application/json
 
 // Connect to MongoDB
