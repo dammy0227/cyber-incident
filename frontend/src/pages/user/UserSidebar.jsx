@@ -1,13 +1,17 @@
 import React from "react";
+import { useNavigate } from "react-router-dom";
+import { FaShieldAlt } from "react-icons/fa"; // shield icon
 
 const UserSidebar = ({ activeTab, onTabChange }) => {
+  const navigate = useNavigate();
+
   return (
     <div className="sidebar">
       <h3>User Menu</h3>
       <ul>
         <li
           className={activeTab === "login" ? "active" : ""}
-          onClick={() => onTabChange("login")} // ✅ fixed casing
+          onClick={() => onTabChange("login")}
         >
           👤 Login
         </li>
@@ -22,6 +26,12 @@ const UserSidebar = ({ activeTab, onTabChange }) => {
           onClick={() => onTabChange("role")}
         >
           🛠 Role Change Attack
+        </li>
+
+        {/* Switch to Admin Dashboard */}
+        <li onClick={() => navigate("/admin/dashboard")} className="switch-link">
+          <FaShieldAlt style={{ marginRight: "8px" }} />
+          Switch to Admin View
         </li>
       </ul>
     </div>

@@ -1,5 +1,3 @@
-// discordBot.js
-
 require("dotenv").config(); // MUST BE FIRST
 
 const {
@@ -54,22 +52,31 @@ client.on(Events.InteractionCreate, async (interaction) => {
     const ip = customId.split("_")[1];
     try {
       await axios.post(`${process.env.BACKEND_URL}/api/admin/block-ip`, { ip });
-      await interaction.reply({ content: `🚫 IP ${ip} has been blocked.`, ephemeral: true });
+      if (!interaction.replied && !interaction.deferred) {
+        await interaction.reply({ content: `🚫 IP ${ip} has been blocked.`, flags: 64 });
+      }
     } catch (err) {
-      await interaction.reply({ content: "❌ Failed to block IP.", ephemeral: true });
+      if (!interaction.replied && !interaction.deferred) {
+        await interaction.reply({ content: "❌ Failed to block IP.", flags: 64 });
+      }
     }
-  }
-
-  if (customId.startsWith("unblock_")) {
+  } else if (customId.startsWith("unblock_")) {
     const ip = customId.split("_")[1];
     try {
       await axios.post(`${process.env.BACKEND_URL}/api/admin/unblock-ip`, { ip });
-      await interaction.reply({ content: `✅ IP ${ip} has been unblocked.`, ephemeral: true });
+      if (!interaction.replied && !interaction.deferred) {
+        await interaction.reply({ content: `✅ IP ${ip} has been unblocked.`, flags: 64 });
+      }
     } catch (err) {
-      await interaction.reply({ content: "❌ Failed to unblock IP.", ephemeral: true });
+      if (!interaction.replied && !interaction.deferred) {
+        await interaction.reply({ content: "❌ Failed to unblock IP.", flags: 64 });
+      }
     }
   }
 });
 
+
 client.login(process.env.DISCORD_BOT_TOKEN);
+
 module.exports = { client };
+ 

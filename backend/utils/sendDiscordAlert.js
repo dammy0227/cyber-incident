@@ -58,3 +58,4 @@ const sendDiscordAlert = async (incident) => {
 };
 
 module.exports = sendDiscordAlert;
+ 
