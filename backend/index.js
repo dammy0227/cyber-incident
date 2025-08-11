@@ -42,6 +42,8 @@ app.use("/api/events", eventRoutes);
 app.use("/api/admin", adminRoutes); // e.g. /api/admin/incidents
 app.use("/api/auth", authRoutes); 
 
+
+
 // Default Route
 app.get("/", (req, res) => {
   res.send("🌐 Cyber Incident Management API is running.");
