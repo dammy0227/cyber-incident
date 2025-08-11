@@ -19,8 +19,12 @@ const app = express();
 const server = http.createServer(app); // ✅ Create HTTP server for Socket.IO
 
 app.use(cors({
-  origin: ['https://your-frontend-domain.com', 'http://localhost:5173'], // replace with your domains
-  credentials: true,
+  origin: [
+    "http://localhost:5173", 
+    "https://cyber-incident-beta.vercel.app"
+  ],
+  methods: ["GET", "POST", "PUT", "DELETE"],
+  credentials: true
 }));
 
 
