@@ -1,103 +1,47 @@
-// backend/utils/sendDiscordAlert.js
 require("dotenv").config();
-const {
-  EmbedBuilder,
-  ActionRowBuilder,
-  ButtonBuilder,
-  ButtonStyle,
-  ChannelType,
-} = require("discord.js");
+const { Client, GatewayIntentBits } = require("discord.js");
 
-const { client, getIsReady } = require("../discordBot");
+const client = new Client({
+  intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages],
+});
 
-const waitForReady = () =>
-  new Promise((resolve) => {
-    if (getIsReady()) return resolve();
-    console.log("⏳ Waiting for Discord bot to be ready...");
-    client.once("ready", () => {
-      console.log("✅ Discord bot is ready, continuing...");
-      resolve();
-    });
-  });
+client.once("ready", () => {
+  console.log(`✅ Discord bot ready as ${client.user.tag}`);
+});
 
-const sendDiscordAlert = async (incident) => {
-  console.log("[DEBUG] sendDiscordAlert called with incident:", incident);
-
-  // Convert Mongoose doc to plain object if needed
-  if (incident.toObject) {
-    incident = incident.toObject();
-  }
-
-  await waitForReady();
-
-  const channelId = process.env.DISCORD_ALERT_CHANNEL_ID;
-  if (!channelId) {
-    console.error("❌ DISCORD_ALERT_CHANNEL_ID not defined in .env");
-    return;
-  }
-
-  let channel;
+// Function to send alert
+async function sendDiscordAlert(incident) {
   try {
-    channel =
-      client.channels.cache.get(channelId) ||
-      (await client.channels.fetch(channelId));
+    // Make sure bot is ready
+    if (!client.isReady()) {
+      console.log("⏳ Waiting for bot to be ready before sending...");
+      await new Promise((resolve) => client.once("ready", resolve));
+    }
+
+    // Get the channel by ID (from your .env)
+    const channel = await client.channels.fetch(process.env.DISCORD_CHANNEL_ID);
 
     if (!channel) {
-      console.error("❌ Could not fetch channel. Check permissions & ID.");
+      console.error("❌ Discord channel not found");
       return;
     }
 
-    if (channel.type !== ChannelType.GuildText) {
-      console.error("❌ Channel is not a text channel.");
-      return;
-    }
-    console.log(`[DEBUG] Sending alert to channel: ${channel.name}`);
-  } catch (err) {
-    console.error("❌ Error fetching channel:", err);
-    return;
+    const message = `🚨 **Incident Alert** 🚨\n` +
+      `**Type:** ${incident.type}\n` +
+      `**User:** ${incident.user}\n` +
+      `**IP:** ${incident.ip}\n` +
+      `**Reason:** ${incident.reason}\n` +
+      `**Severity:** ${incident.severity}\n` +
+      `**Threat:** ${incident.threat ? "Yes" : "No"}`;
+
+    await channel.send(message);
+    console.log("✅ Alert sent to Discord");
+
+  } catch (error) {
+    console.error("❌ Failed to send Discord alert:", error);
   }
+}
 
-  // Severity colors
-  const severityColors = {
-    high: 0xff0000,
-    medium: 0xffa500,
-    low: 0x00ff00,
-  };
-
-  const embed = new EmbedBuilder()
-    .setTitle(`🚨 ${incident.type ? incident.type.toUpperCase() : "EVENT"} Alert`)
-    .setColor(severityColors[incident.severity] || 0x808080)
-    .addFields(
-      { name: "👤 User", value: incident.user || "N/A", inline: true },
-      { name: "🌐 IP", value: incident.ip || "N/A", inline: true },
-      { name: "⚠️ Reason", value: incident.reason || "N/A" },
-      { name: "🔐 Severity", value: incident.severity || "low" },
-      { name: "🕒 Time", value: new Date().toLocaleString() }
-    );
-
-  const row = new ActionRowBuilder().addComponents(
-    new ButtonBuilder()
-      .setCustomId(`block_${incident.ip}`)
-      .setLabel("🚫 Block IP")
-      .setStyle(ButtonStyle.Danger),
-    new ButtonBuilder()
-      .setCustomId(`unblock_${incident.ip}`)
-      .setLabel("✅ Unblock IP")
-      .setStyle(ButtonStyle.Success)
-  );
-
-  try {
-    await channel.send({
-      content: incident.threat
-        ? "⚠️ **New Threat Detected**"
-        : "ℹ️ **Login Event Logged**",
-      embeds: [embed],
-      components: [row],
-    });
-    console.log("✅ Discord alert sent successfully.");
-  } catch (err) {
-    console.error("❌ Failed to send Discord alert:", err);
-  }
-};
+client.login(process.env.DISCORD_BOT_TOKEN);
 
 module.exports = sendDiscordAlert;
