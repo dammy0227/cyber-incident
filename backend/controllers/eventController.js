@@ -1,5 +1,4 @@
 // controllers/eventController.js
-
 const Incident = require("../models/Incident");
 const analyzeEvent = require("../ai/aiEngine");
 const { emitAlert } = require("../sockets/alertSocket");
@@ -12,8 +11,6 @@ const getIP = (req) =>
   req.headers["x-forwarded-for"] || req.connection.remoteAddress || req.ip;
 
 // Login handler
-
-
 exports.handleLogin = async (req, res) => {
   const { user } = req.body;
   const ip = getIP(req);
@@ -36,24 +33,13 @@ exports.handleLogin = async (req, res) => {
 
     emitAlert(incident);
 
+    // Only send Discord alert if it's a threat and IP is not already blocked
     const isBlocked = await BlockedIP.findOne({ ip });
-
-    console.log(`[DEBUG] Login Incident - threat: ${result.threat}, IP blocked: ${!!isBlocked}`);
-
-    // 🆕 Always send Discord alert for login, even if not a threat
-    if (!isBlocked) {
-      console.log("[DEBUG] Sending Discord alert for login incident...");
-      try {
-        await sendDiscordAlert(incident); // will color-code based on severity
-        console.log("[DEBUG] Discord alert sent successfully.");
-      } catch (err) {
-        console.error("[ERROR] Failed to send Discord alert:", err);
-      }
-    } else {
-      console.log("[DEBUG] Discord alert skipped because IP is blocked.");
+    if (result.threat && !isBlocked) {
+      await sendDiscordAlert(incident);
     }
 
-    // 🆕 Still auto-block high-severity threats
+    // Auto-block IP for high-severity threats
     if (result.threat && result.severity === "high") {
       await BlockedIP.updateOne({ ip }, { ip }, { upsert: true });
     }
@@ -82,8 +68,10 @@ exports.handleUpload = async (req, res) => {
   }
 
   try {
+    // ✅ Check if IP is trusted
     const isTrusted = await TrustedIP.findOne({ user, ip });
 
+    // If trusted, skip threat detection (but checkBlockedIP already enforced window/quota)
     if (isTrusted) {
       const incident = await Incident.create({
         user,
@@ -95,11 +83,10 @@ exports.handleUpload = async (req, res) => {
       });
 
       emitAlert(incident);
-
-      console.log("[DEBUG] Trusted IP upload, skipping threat detection and Discord alert.");
       return res.status(200).json({ message: "File uploaded successfully (trusted IP)" });
     }
 
+    // 🔍 Otherwise, analyze the upload
     const result = await analyzeEvent({
       user,
       ip,
@@ -122,19 +109,8 @@ exports.handleUpload = async (req, res) => {
     emitAlert(incident);
 
     const isBlocked = await BlockedIP.findOne({ ip });
-
-    console.log(`[DEBUG] Upload Incident - threat: ${result.threat}, IP blocked: ${!!isBlocked}`);
-
     if (result.threat && !isBlocked) {
-      console.log("[DEBUG] Sending Discord alert for upload incident...");
-      try {
-        await sendDiscordAlert(incident);
-        console.log("[DEBUG] Discord alert sent successfully.");
-      } catch (err) {
-        console.error("[ERROR] Failed to send Discord alert:", err);
-      }
-    } else {
-      console.log("[DEBUG] Discord alert skipped for upload.");
+      await sendDiscordAlert(incident);
     }
 
     if (result.threat && result.severity === "high") {
@@ -184,19 +160,8 @@ exports.handleRoleChange = async (req, res) => {
     emitAlert(incident);
 
     const isBlocked = await BlockedIP.findOne({ ip });
-
-    console.log(`[DEBUG] Role Change Incident - threat: ${result.threat}, IP blocked: ${!!isBlocked}`);
-
     if (result.threat && !isBlocked) {
-      console.log("[DEBUG] Sending Discord alert for role change incident...");
-      try {
-        await sendDiscordAlert(incident);
-        console.log("[DEBUG] Discord alert sent successfully.");
-      } catch (err) {
-        console.error("[ERROR] Failed to send Discord alert:", err);
-      }
-    } else {
-      console.log("[DEBUG] Discord alert skipped for role change.");
+      await sendDiscordAlert(incident);
     }
 
     if (result.threat && result.severity === "high") {
