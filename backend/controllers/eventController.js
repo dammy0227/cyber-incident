@@ -12,6 +12,8 @@ const getIP = (req) =>
   req.headers["x-forwarded-for"] || req.connection.remoteAddress || req.ip;
 
 // Login handler
+
+
 exports.handleLogin = async (req, res) => {
   const { user } = req.body;
   const ip = getIP(req);
@@ -38,18 +40,20 @@ exports.handleLogin = async (req, res) => {
 
     console.log(`[DEBUG] Login Incident - threat: ${result.threat}, IP blocked: ${!!isBlocked}`);
 
-    if (result.threat && !isBlocked) {
+    // 🆕 Always send Discord alert for login, even if not a threat
+    if (!isBlocked) {
       console.log("[DEBUG] Sending Discord alert for login incident...");
       try {
-        await sendDiscordAlert(incident);
+        await sendDiscordAlert(incident); // will color-code based on severity
         console.log("[DEBUG] Discord alert sent successfully.");
       } catch (err) {
         console.error("[ERROR] Failed to send Discord alert:", err);
       }
     } else {
-      console.log("[DEBUG] Discord alert skipped for login.");
+      console.log("[DEBUG] Discord alert skipped because IP is blocked.");
     }
 
+    // 🆕 Still auto-block high-severity threats
     if (result.threat && result.severity === "high") {
       await BlockedIP.updateOne({ ip }, { ip }, { upsert: true });
     }
