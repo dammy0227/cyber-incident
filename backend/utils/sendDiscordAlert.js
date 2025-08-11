@@ -1,20 +1,25 @@
-// utils/sendDiscordAlert.js
-
 require("dotenv").config();
 const {
   EmbedBuilder,
   ActionRowBuilder,
   ButtonBuilder,
   ButtonStyle,
-  ChannelType
+  ChannelType,
 } = require("discord.js");
-const { client } = require("../discordBot");
+
+const { client, isReady } = require("../discordBot");
+
+// Wait for bot to be ready before sending alerts
+const waitForReady = () =>
+  new Promise((resolve) => {
+    if (isReady) return resolve();
+    client.once("ready", () => resolve());
+  });
 
 const sendDiscordAlert = async (incident) => {
-  console.log("DEBUG: sendDiscordAlert called with incident:", incident);
+  await waitForReady();
 
   const channelId = process.env.DISCORD_ALERT_CHANNEL_ID;
-  console.log("DEBUG: DISCORD_ALERT_CHANNEL_ID:", channelId);
 
   if (!channelId) {
     console.error("❌ DISCORD_ALERT_CHANNEL_ID not defined.");
@@ -22,15 +27,14 @@ const sendDiscordAlert = async (incident) => {
   }
 
   try {
-    const channel = await client.channels.fetch(channelId);
-    console.log("DEBUG: Fetched channel:", channel?.id, channel?.type);
+    const channel =
+      client.channels.cache.get(channelId) || (await client.channels.fetch(channelId));
 
     if (!channel || channel.type !== ChannelType.GuildText) {
-      console.error("❌ Invalid channel or permissions.");
+      console.error("❌ Invalid channel or bot lacks permissions.");
       return;
     }
 
-    console.log("DEBUG: Preparing Discord embed...");
     const embed = new EmbedBuilder()
       .setTitle(`🚨 ${incident.type.toUpperCase()} Threat Detected`)
       .setColor(incident.severity === "high" ? 0xff0000 : 0xffa500)
@@ -53,18 +57,16 @@ const sendDiscordAlert = async (incident) => {
         .setStyle(ButtonStyle.Success)
     );
 
-    console.log("DEBUG: Sending alert message to Discord channel...");
     await channel.send({
       content: "⚠️ **New Threat Detected**",
       embeds: [embed],
       components: [row],
     });
-    console.log("DEBUG: Discord alert sent successfully.");
+
+    console.log("✅ Discord alert sent.");
   } catch (err) {
     console.error("❌ Failed to send alert:", err);
   }
 };
 
-
 module.exports = sendDiscordAlert;
- 
