@@ -6,44 +6,53 @@ const BlockedIP = require("../models/BlockedIP");
 const TrustedIP = require("../models/TrustedIP");
 const sendDiscordAlert = require("../utils/sendDiscordAlert");
 
-// Helper: get IP from request or header
 const getIP = (req) =>
   req.headers["x-forwarded-for"] || req.connection.remoteAddress || req.ip;
 
-// Login handler
+// Helper to process and send incident
+async function processIncident(user, ip, type, details) {
+  console.log(`\n[DEBUG] Processing incident: ${type} for ${user} (${ip})`);
+  const result = await analyzeEvent({ user, ip, type, ...details });
+
+  const incident = await Incident.create({
+    user,
+    ip,
+    type,
+    reason: result.reason || `${type} event`,
+    severity: result.severity || "low",
+    threat: Boolean(result.threat),
+  });
+
+  console.log(`[DEBUG] Incident saved to DB: ${incident._id}`);
+  emitAlert(incident);
+
+  // Always send to Discord for debugging
+  try {
+    console.log(`[DEBUG] Sending ${type} alert to Discord...`);
+    await sendDiscordAlert(incident);
+    console.log(`[DEBUG] Discord alert sent successfully`);
+  } catch (err) {
+    console.error(`[ERROR] Failed to send Discord alert:`, err.message);
+  }
+
+  // Auto-block if severe threat
+  const isBlocked = await BlockedIP.findOne({ ip });
+  if (result.threat && result.severity === "high" && !isBlocked) {
+    await BlockedIP.updateOne({ ip }, { ip }, { upsert: true });
+    console.log(`[DEBUG] IP ${ip} auto-blocked`);
+  }
+
+  return { result, incident };
+}
+
+// LOGIN
 exports.handleLogin = async (req, res) => {
   const { user } = req.body;
   const ip = getIP(req);
-
-  if (!user) {
-    return res.status(400).json({ error: "User email is required" });
-  }
+  if (!user) return res.status(400).json({ error: "User email is required" });
 
   try {
-    const result = await analyzeEvent({ user, ip, type: "login" });
-
-    const incident = await Incident.create({
-      user,
-      ip,
-      type: "login",
-      reason: result.reason || "Login successful",
-      severity: result.severity || "low",
-      threat: Boolean(result.threat),
-    });
-
-    emitAlert(incident);
-
-    // Only send Discord alert if it's a threat and IP is not already blocked
-    const isBlocked = await BlockedIP.findOne({ ip });
-    if (result.threat && !isBlocked) {
-      await sendDiscordAlert(incident);
-    }
-
-    // Auto-block IP for high-severity threats
-    if (result.threat && result.severity === "high") {
-      await BlockedIP.updateOne({ ip }, { ip }, { upsert: true });
-    }
-
+    const { result } = await processIncident(user, ip, "login", {});
     res.status(200).json({
       message: result.threat ? "Suspicious login" : "Login successful",
       ip,
@@ -57,22 +66,17 @@ exports.handleLogin = async (req, res) => {
   }
 };
 
-// File upload handler
+// UPLOAD
 exports.handleUpload = async (req, res) => {
   const { user } = req.body;
   const file = req.file;
   const ip = getIP(req);
-
-  if (!user || !file) {
-    return res.status(400).json({ error: "Missing user or file" });
-  }
+  if (!user || !file) return res.status(400).json({ error: "Missing user or file" });
 
   try {
-    // ✅ Check if IP is trusted
     const isTrusted = await TrustedIP.findOne({ user, ip });
-
-    // If trusted, skip threat detection (but checkBlockedIP already enforced window/quota)
     if (isTrusted) {
+      console.log(`[DEBUG] Trusted IP upload by ${user} (${ip}), skipping AI analysis`);
       const incident = await Incident.create({
         user,
         ip,
@@ -81,41 +85,14 @@ exports.handleUpload = async (req, res) => {
         severity: "low",
         threat: false,
       });
-
       emitAlert(incident);
+      await sendDiscordAlert(incident);
       return res.status(200).json({ message: "File uploaded successfully (trusted IP)" });
     }
 
-    // 🔍 Otherwise, analyze the upload
-    const result = await analyzeEvent({
-      user,
-      ip,
-      type: "upload",
-      file: {
-        name: file.originalname,
-        size: file.size,
-      },
+    const { result } = await processIncident(user, ip, "upload", {
+      file: { name: file.originalname, size: file.size },
     });
-
-    const incident = await Incident.create({
-      user,
-      ip,
-      type: "upload",
-      reason: result.reason || "File uploaded",
-      severity: result.severity || "low",
-      threat: Boolean(result.threat),
-    });
-
-    emitAlert(incident);
-
-    const isBlocked = await BlockedIP.findOne({ ip });
-    if (result.threat && !isBlocked) {
-      await sendDiscordAlert(incident);
-    }
-
-    if (result.threat && result.severity === "high") {
-      await BlockedIP.updateOne({ ip }, { ip }, { upsert: true });
-    }
 
     if (result.threat) {
       return res.status(403).json({
@@ -131,42 +108,17 @@ exports.handleUpload = async (req, res) => {
   }
 };
 
-// Role change handler
+// ROLE CHANGE
 exports.handleRoleChange = async (req, res) => {
   const { user, oldRole, newRole } = req.body;
   const ip = getIP(req);
-
-  if (!user || !oldRole || !newRole) {
+  if (!user || !oldRole || !newRole)
     return res.status(400).json({ error: "Missing role change information" });
-  }
 
   try {
-    const result = await analyzeEvent({
-      user,
-      ip,
-      type: "role_change",
+    const { result } = await processIncident(user, ip, "role_change", {
       roleChange: { oldRole, newRole },
     });
-
-    const incident = await Incident.create({
-      user,
-      ip,
-      type: "role_change",
-      reason: result.reason || "Role changed successfully",
-      severity: result.severity || "low",
-      threat: Boolean(result.threat),
-    });
-
-    emitAlert(incident);
-
-    const isBlocked = await BlockedIP.findOne({ ip });
-    if (result.threat && !isBlocked) {
-      await sendDiscordAlert(incident);
-    }
-
-    if (result.threat && result.severity === "high") {
-      await BlockedIP.updateOne({ ip }, { ip }, { upsert: true });
-    }
 
     if (result.threat) {
       return res.status(403).json({

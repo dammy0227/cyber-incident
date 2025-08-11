@@ -11,27 +11,44 @@ const {
 const { client } = require("../discordBot");
 
 const sendDiscordAlert = async (incident) => {
-  const channelId = process.env.DISCORD_ALERT_CHANNEL_ID;
+  console.log("[DEBUG] Preparing to send Discord alert...");
 
+  const channelId = process.env.DISCORD_ALERT_CHANNEL_ID;
   if (!channelId) {
-    console.error("❌ DISCORD_ALERT_CHANNEL_ID not defined.");
+    console.error("❌ DISCORD_ALERT_CHANNEL_ID not defined in .env");
     return;
   }
 
-  const channel = await client.channels.fetch(channelId);
+  // Wait until bot is ready
+  if (!client.isReady()) {
+    console.warn("⚠️ Discord client not ready yet. Waiting...");
+    await new Promise((resolve) => {
+      client.once("ready", resolve);
+    });
+  }
+
+  let channel;
+  try {
+    channel = await client.channels.fetch(channelId);
+    console.log(`[DEBUG] Fetched channel: ${channel?.name || "Not Found"}`);
+  } catch (err) {
+    console.error("❌ Failed to fetch channel:", err.message);
+    return;
+  }
+
   if (!channel || channel.type !== ChannelType.GuildText) {
-    console.error("❌ Invalid channel or permissions.");
+    console.error("❌ Invalid channel or bot missing permissions (Send/View Messages).");
     return;
   }
 
   const embed = new EmbedBuilder()
-    .setTitle(`🚨 ${incident.type.toUpperCase()} Threat Detected`)
+    .setTitle(`🚨 ${incident.type?.toUpperCase()} Threat Detected`)
     .setColor(incident.severity === "high" ? 0xff0000 : 0xffa500)
     .addFields(
-      { name: "👤 User", value: incident.user, inline: true },
-      { name: "🌐 IP", value: incident.ip, inline: true },
-      { name: "⚠️ Reason", value: incident.reason },
-      { name: "🔐 Severity", value: incident.severity },
+      { name: "👤 User", value: incident.user || "N/A", inline: true },
+      { name: "🌐 IP", value: incident.ip || "N/A", inline: true },
+      { name: "⚠️ Reason", value: incident.reason || "N/A" },
+      { name: "🔐 Severity", value: incident.severity || "unknown" },
       { name: "🕒 Time", value: new Date().toLocaleString() }
     );
 
@@ -48,14 +65,14 @@ const sendDiscordAlert = async (incident) => {
 
   try {
     await channel.send({
-      content: "⚠️ **New Threat Detected**", // Optional: add <@&ROLE_ID> to ping role
+      content: "⚠️ **New Threat Detected**",
       embeds: [embed],
       components: [row]
     });
+    console.log("[DEBUG] Discord alert sent successfully ✅");
   } catch (err) {
-    console.error("❌ Failed to send alert:", err.message);
+    console.error("❌ Failed to send alert to Discord:", err.message);
   }
 };
 
 module.exports = sendDiscordAlert;
- 
