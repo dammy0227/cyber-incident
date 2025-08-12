@@ -1,17 +1,19 @@
+// routes/admin.js
 const express = require("express");
 const router = express.Router();
 const adminController = require("../controllers/adminController");
+const auth = require("../middleware/auth");
 
-// 📊 Incident Routes
+// Protect all admin routes with auth middleware
+router.use(auth);
+
 router.get("/incidents", adminController.getAllIncidents);
 
-// 🚫 Blocked IP Routes
 router.post("/block-ip", adminController.blockIP);
 router.post("/unblock-ip", adminController.unblockIP);
-router.get("/blocked-ips", adminController.getBlockedIPs); // FIX: route consistency
+router.get("/blocked-ips", adminController.getBlockedIPs);
 
-// ✅ Trusted IP Routes
-router.post("/add-trusted-ip", adminController.addTrustedIP);     // FIX: cleaner naming
+router.post("/add-trusted-ip", adminController.addTrustedIP);
 router.post("/remove-trusted-ip", adminController.removeTrustedIP);
 router.get("/trusted-ips", adminController.getTrustedIPs);
 

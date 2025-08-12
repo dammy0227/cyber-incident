@@ -7,9 +7,9 @@ export const loginUser = async (user) => {
   return axios.post(`${BASE_URL}/events/login`, { user });
 };
 
-export const uploadFile = async (user, file) => {
+export const uploadFile = async (email, file) => {
   const formData = new FormData();
-  formData.append("user", user);
+  formData.append("user", email); // clearer param name
   formData.append("file", file);
 
   return axios.post(`${BASE_URL}/events/upload`, formData, {
@@ -19,6 +19,6 @@ export const uploadFile = async (user, file) => {
   });
 };
 
-export const changeRole = async (user, oldRole, newRole) => {
-  return axios.post(`${BASE_URL}/events/role-change`, { user, oldRole, newRole });
+export const changeRole = async (email, oldRole, newRole) => {
+  return axios.post(`${BASE_URL}/events/role-change`, { user: email, oldRole, newRole });
 };

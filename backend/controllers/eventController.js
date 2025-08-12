@@ -1,17 +1,13 @@
 // controllers/eventController.js
 const Incident = require("../models/Incident");
-const analyzeEvent = require("../ai/aiEngine");
-const { emitAlert } = require("../sockets/alertSocket");
 const BlockedIP = require("../models/BlockedIP");
 const TrustedIP = require("../models/TrustedIP");
-const sendDiscordAlert = require("../utils/sendDiscordAlert");
+const analyzeEvent = require("../ai/aiEngine");
 
 const getIP = (req) =>
   req.headers["x-forwarded-for"] || req.connection.remoteAddress || req.ip;
 
-// Helper to process and send incident
 async function processIncident(user, ip, type, details) {
-  console.log(`\n[DEBUG] Processing incident: ${type} for ${user} (${ip})`);
   const result = await analyzeEvent({ user, ip, type, ...details });
 
   const incident = await Incident.create({
@@ -21,73 +17,64 @@ async function processIncident(user, ip, type, details) {
     reason: result.reason || `${type} event`,
     severity: result.severity || "low",
     threat: Boolean(result.threat),
+    file: details.file,
+    roleChange: details.roleChange,
   });
 
-  console.log(`[DEBUG] Incident saved to DB: ${incident._id}`);
-  emitAlert(incident);
-
-  // Always send to Discord for debugging
-  try {
-    console.log(`[DEBUG] Sending ${type} alert to Discord...`);
-    await sendDiscordAlert(incident);
-    console.log(`[DEBUG] Discord alert sent successfully`);
-  } catch (err) {
-    console.error(`[ERROR] Failed to send Discord alert:`, err.message);
-  }
-
-  // Auto-block if severe threat
-  const isBlocked = await BlockedIP.findOne({ ip });
-  if (result.threat && result.severity === "high" && !isBlocked) {
-    await BlockedIP.updateOne({ ip }, { ip }, { upsert: true });
-    console.log(`[DEBUG] IP ${ip} auto-blocked`);
+  // Auto-block if high threat and IP not blocked yet
+  if (result.threat && result.severity === "high") {
+    const blocked = await BlockedIP.findOne({ ip });
+    if (!blocked) {
+      await BlockedIP.create({ ip, reason: result.reason });
+    }
   }
 
   return { result, incident };
 }
 
-// LOGIN
 exports.handleLogin = async (req, res) => {
   const { user } = req.body;
   const ip = getIP(req);
-  if (!user) return res.status(400).json({ error: "User email is required" });
+
+  if (!user) return res.status(400).json({ error: "User email required" });
 
   try {
     const { result } = await processIncident(user, ip, "login", {});
-    res.status(200).json({
+    res.json({
       message: result.threat ? "Suspicious login" : "Login successful",
+      threat: result.threat,
+      reason: result.reason,
+      severity: result.severity,
       ip,
-      threat: Boolean(result.threat),
-      reason: result.reason || null,
-      severity: result.severity || "low",
     });
   } catch (err) {
-    console.error("Login error:", err);
+    console.error(err);
     res.status(500).json({ error: "Internal server error" });
   }
 };
 
-// UPLOAD
 exports.handleUpload = async (req, res) => {
   const { user } = req.body;
-  const file = req.file;
   const ip = getIP(req);
-  if (!user || !file) return res.status(400).json({ error: "Missing user or file" });
+  const file = req.file;
+
+  if (!user) return res.status(400).json({ error: "User email required" });
+  if (!file) return res.status(400).json({ error: "File required" });
 
   try {
-    const isTrusted = await TrustedIP.findOne({ user, ip });
-    if (isTrusted) {
-      console.log(`[DEBUG] Trusted IP upload by ${user} (${ip}), skipping AI analysis`);
-      const incident = await Incident.create({
+    // Skip AI analysis for trusted IPs
+    const trusted = await TrustedIP.findOne({ user, ip });
+    if (trusted) {
+      await Incident.create({
         user,
         ip,
         type: "upload",
-        reason: "Trusted IP upload bypassed analysis",
+        reason: "Trusted IP upload - bypass AI",
         severity: "low",
         threat: false,
+        file: { name: file.originalname, size: file.size },
       });
-      emitAlert(incident);
-      await sendDiscordAlert(incident);
-      return res.status(200).json({ message: "File uploaded successfully (trusted IP)" });
+      return res.json({ message: "File uploaded (trusted IP)" });
     }
 
     const { result } = await processIncident(user, ip, "upload", {
@@ -95,25 +82,22 @@ exports.handleUpload = async (req, res) => {
     });
 
     if (result.threat) {
-      return res.status(403).json({
-        message: result.reason,
-        severity: result.severity,
-      });
+      return res.status(403).json({ message: result.reason, severity: result.severity });
     }
 
-    res.status(200).json({ message: "File uploaded successfully" });
+    res.json({ message: "File uploaded successfully" });
   } catch (err) {
-    console.error("Upload error:", err);
+    console.error(err);
     res.status(500).json({ error: "Internal server error" });
   }
 };
 
-// ROLE CHANGE
 exports.handleRoleChange = async (req, res) => {
   const { user, oldRole, newRole } = req.body;
   const ip = getIP(req);
+
   if (!user || !oldRole || !newRole)
-    return res.status(400).json({ error: "Missing role change information" });
+    return res.status(400).json({ error: "Missing role change info" });
 
   try {
     const { result } = await processIncident(user, ip, "role_change", {
@@ -121,15 +105,12 @@ exports.handleRoleChange = async (req, res) => {
     });
 
     if (result.threat) {
-      return res.status(403).json({
-        message: result.reason,
-        severity: result.severity,
-      });
+      return res.status(403).json({ message: result.reason, severity: result.severity });
     }
 
-    res.status(200).json({ message: "Role updated successfully" });
+    res.json({ message: "Role changed successfully" });
   } catch (err) {
-    console.error("Role change error:", err);
+    console.error(err);
     res.status(500).json({ error: "Internal server error" });
   }
 };

@@ -1,67 +1,108 @@
 // src/pages/admin/TrustedIPsPage.jsx
 import React, { useEffect, useState } from "react";
-import {
-  getTrustedIPs,
-  addTrustedIP,
-  removeTrustedIP,
-} from "../../api/adminApi";
+import useAdminApi from "../../api/adminApi";
 import "./TrustedIPsPage.css";
 
 const TrustedIPsPage = () => {
+  const {
+    getTrustedIPs,
+    addTrustedIP,
+    removeTrustedIP,
+  } = useAdminApi();
+
   const [trusted, setTrusted] = useState([]);
   const [user, setUser] = useState("");
   const [ip, setIP] = useState("");
 
-  // Time restrictions
-  const [loginStart, setLoginStart] = useState("");
-  const [loginEnd, setLoginEnd] = useState("");
-  const [uploadStart, setUploadStart] = useState("");
-  const [uploadEnd, setUploadEnd] = useState("");
-  const [roleStart, setRoleStart] = useState("");
-  const [roleEnd, setRoleEnd] = useState("");
+  // Time restrictions renamed to backend keys
+  const [allowedFrom, setAllowedFrom] = useState(""); // login window start
+  const [allowedTo, setAllowedTo] = useState("");     // login window end
+
+  // Upload time window (optional, adapt backend if needed)
+  const [uploadAllowedFrom, setUploadAllowedFrom] = useState("");
+  const [uploadAllowedTo, setUploadAllowedTo] = useState("");
+
+  // Role change time window (optional, adapt backend if needed)
+  const [roleAllowedFrom, setRoleAllowedFrom] = useState("");
+  const [roleAllowedTo, setRoleAllowedTo] = useState("");
 
   // Limits
-  const [maxLogins, setMaxLogins] = useState(3);
-  const [maxUploads, setMaxUploads] = useState(5);
-  const [maxRoles, setMaxRoles] = useState(2);
+  const [maxLoginsPerWindow, setMaxLoginsPerWindow] = useState(3);
+  const [maxUploadsPerWindow, setMaxUploadsPerWindow] = useState(5);
+  const [maxRoleChangesPerWindow, setMaxRoleChangesPerWindow] = useState(2);
 
+  // Load trusted IPs
   const load = async () => {
-    const res = await getTrustedIPs();
-    setTrusted(res.data);
+    try {
+      const res = await getTrustedIPs();
+      setTrusted(res.data);
+    } catch (err) {
+      console.error("❌ Failed to load trusted IPs", err);
+    }
   };
 
-  useEffect(() => {
-    load();
-  }, []);
+useEffect(() => {
+  const load = async () => {
+    try {
+      const res = await getTrustedIPs();
+      setTrusted(res.data);
+    } catch (err) {
+      console.error("❌ Failed to load trusted IPs", err);
+    }
+  };
 
+  load();
+}, [getTrustedIPs]);
+
+  // Add trusted IP handler
   const handleAdd = async () => {
     if (!user || !ip) {
       alert("Please enter both User and IP Address");
       return;
     }
-    await addTrustedIP(user, ip, {
-      loginStart, loginEnd,
-      uploadStart, uploadEnd,
-      roleStart, roleEnd,
-      maxLogins, maxUploads, maxRoles
-    });
-    setUser("");
-    setIP("");
-    setLoginStart("");
-    setLoginEnd("");
-    setUploadStart("");
-    setUploadEnd("");
-    setRoleStart("");
-    setRoleEnd("");
-    setMaxLogins(3);
-    setMaxUploads(5);
-    setMaxRoles(2);
-    load();
+
+    try {
+      await addTrustedIP(user, ip, {
+        allowedFrom,
+        allowedTo,
+        uploadAllowedFrom,
+        uploadAllowedTo,
+        roleAllowedFrom,
+        roleAllowedTo,
+        maxLoginsPerWindow: Number(maxLoginsPerWindow),
+        maxUploadsPerWindow: Number(maxUploadsPerWindow),
+        maxRoleChangesPerWindow: Number(maxRoleChangesPerWindow),
+      });
+
+      // Reset form
+      setUser("");
+      setIP("");
+      setAllowedFrom("");
+      setAllowedTo("");
+      setUploadAllowedFrom("");
+      setUploadAllowedTo("");
+      setRoleAllowedFrom("");
+      setRoleAllowedTo("");
+      setMaxLoginsPerWindow(3);
+      setMaxUploadsPerWindow(5);
+      setMaxRoleChangesPerWindow(2);
+
+      load();
+    } catch (err) {
+      console.error("❌ Failed to add trusted IP", err);
+      alert("Failed to add trusted IP");
+    }
   };
 
+  // Remove trusted IP handler
   const handleRemove = async (ipItem) => {
-    await removeTrustedIP(ipItem.user, ipItem.ip);
-    load();
+    try {
+      await removeTrustedIP(ipItem.user, ipItem.ip);
+      load();
+    } catch (err) {
+      console.error("❌ Failed to remove trusted IP", err);
+      alert("Failed to remove trusted IP");
+    }
   };
 
   return (
@@ -71,42 +112,91 @@ const TrustedIPsPage = () => {
       <div className="trusted-form">
         {/* User + IP */}
         <div className="form-row">
-          <input placeholder="User" value={user} onChange={(e) => setUser(e.target.value)} />
-          <input placeholder="IP Address" value={ip} onChange={(e) => setIP(e.target.value)} />
+          <input
+            placeholder="User"
+            value={user}
+            onChange={(e) => setUser(e.target.value)}
+          />
+          <input
+            placeholder="IP Address"
+            value={ip}
+            onChange={(e) => setIP(e.target.value)}
+          />
         </div>
 
         {/* Login restriction */}
         <div className="form-row">
           <label>Login Time</label>
-          <input type="time" value={loginStart} onChange={(e) => setLoginStart(e.target.value)} />
+          <input
+            type="time"
+            value={allowedFrom}
+            onChange={(e) => setAllowedFrom(e.target.value)}
+          />
           <span>to</span>
-          <input type="time" value={loginEnd} onChange={(e) => setLoginEnd(e.target.value)} />
+          <input
+            type="time"
+            value={allowedTo}
+            onChange={(e) => setAllowedTo(e.target.value)}
+          />
         </div>
 
         {/* Upload restriction */}
         <div className="form-row">
           <label>Upload Time</label>
-          <input type="time" value={uploadStart} onChange={(e) => setUploadStart(e.target.value)} />
+          <input
+            type="time"
+            value={uploadAllowedFrom}
+            onChange={(e) => setUploadAllowedFrom(e.target.value)}
+          />
           <span>to</span>
-          <input type="time" value={uploadEnd} onChange={(e) => setUploadEnd(e.target.value)} />
+          <input
+            type="time"
+            value={uploadAllowedTo}
+            onChange={(e) => setUploadAllowedTo(e.target.value)}
+          />
         </div>
 
         {/* Role change restriction */}
         <div className="form-row">
           <label>Role Change Time</label>
-          <input type="time" value={roleStart} onChange={(e) => setRoleStart(e.target.value)} />
+          <input
+            type="time"
+            value={roleAllowedFrom}
+            onChange={(e) => setRoleAllowedFrom(e.target.value)}
+          />
           <span>to</span>
-          <input type="time" value={roleEnd} onChange={(e) => setRoleEnd(e.target.value)} />
+          <input
+            type="time"
+            value={roleAllowedTo}
+            onChange={(e) => setRoleAllowedTo(e.target.value)}
+          />
         </div>
 
         {/* Limits */}
         <div className="form-row">
-          <input type="number" placeholder="Max Logins/day" value={maxLogins} onChange={(e) => setMaxLogins(e.target.value)} />
-          <input type="number" placeholder="Max Uploads/day" value={maxUploads} onChange={(e) => setMaxUploads(e.target.value)} />
-          <input type="number" placeholder="Max Role Changes/day" value={maxRoles} onChange={(e) => setMaxRoles(e.target.value)} />
+          <input
+            type="number"
+            placeholder="Max Logins per Window"
+            value={maxLoginsPerWindow}
+            onChange={(e) => setMaxLoginsPerWindow(e.target.value)}
+          />
+          <input
+            type="number"
+            placeholder="Max Uploads per Window"
+            value={maxUploadsPerWindow}
+            onChange={(e) => setMaxUploadsPerWindow(e.target.value)}
+          />
+          <input
+            type="number"
+            placeholder="Max Role Changes per Window"
+            value={maxRoleChangesPerWindow}
+            onChange={(e) => setMaxRoleChangesPerWindow(e.target.value)}
+          />
         </div>
 
-        <button onClick={handleAdd} className="add-btn">Add Trusted IP</button>
+        <button onClick={handleAdd} className="add-btn">
+          Add Trusted IP
+        </button>
       </div>
 
       <table className="trusted-table">
@@ -124,13 +214,18 @@ const TrustedIPsPage = () => {
               <td>{t.user}</td>
               <td>{t.ip}</td>
               <td>
-                Login: {t.loginStart} - {t.loginEnd} <br />
-                Upload: {t.uploadStart} - {t.uploadEnd} <br />
-                Role Change: {t.roleStart} - {t.roleEnd} <br />
-                Limits: L:{t.maxLogins} / U:{t.maxUploads} / R:{t.maxRoles}
+                Login: {t.allowedFrom || "N/A"} - {t.allowedTo || "N/A"} <br />
+                Upload: {t.uploadAllowedFrom || "N/A"} - {t.uploadAllowedTo || "N/A"} <br />
+                Role Change: {t.roleAllowedFrom || "N/A"} - {t.roleAllowedTo || "N/A"} <br />
+                Limits: L: {t.maxLoginsPerWindow ?? "N/A"} / U: {t.maxUploadsPerWindow ?? "N/A"} / R: {t.maxRoleChangesPerWindow ?? "N/A"}
               </td>
               <td>
-                <button className="remove-btn" onClick={() => handleRemove(t)}>Remove</button>
+                <button
+                  className="remove-btn"
+                  onClick={() => handleRemove(t)}
+                >
+                  Remove
+                </button>
               </td>
             </tr>
           ))}

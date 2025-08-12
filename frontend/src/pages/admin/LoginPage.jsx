@@ -1,9 +1,10 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import useAdmin from "../../content/useAdmin";
-import { loginAdmin } from "../../api/adminApi";
+import useAdminApi from "../../api/adminApi";
 
 const AdminLoginPage = () => {
+  const { loginAdmin } = useAdminApi(); 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const { login } = useAdmin();

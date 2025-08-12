@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import "./components.css";
 
-const FileUploader = ({ onUpload }) => {
+const FileUploader = ({ onUpload, disabled }) => {
   const [file, setFile] = useState(null);
 
   const handleChange = (e) => {
@@ -17,8 +17,11 @@ const FileUploader = ({ onUpload }) => {
   return (
     <div className="file-uploader">
       <p>Select a file to upload</p>
-      <input type="file" onChange={handleChange} />
-      <button onClick={handleSubmit}>Upload</button>
+      <input type="file" onChange={handleChange} disabled={disabled} />
+      <button onClick={handleSubmit} disabled={disabled}>
+        Upload
+      </button>
+      {disabled && <p style={{ color: "red" }}>Please log in to upload files.</p>}
     </div>
   );
 };

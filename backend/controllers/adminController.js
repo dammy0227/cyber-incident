@@ -2,103 +2,92 @@
 const Incident = require("../models/Incident");
 const BlockedIP = require("../models/BlockedIP");
 const TrustedIP = require("../models/TrustedIP");
-const { emitAlert, emitForceLogout } = require("../sockets/alertSocket");
 
-// 🚨 INCIDENTS
+// INCIDENTS
 exports.getAllIncidents = async (req, res) => {
   try {
     const incidents = await Incident.find().sort({ createdAt: -1 });
-    res.status(200).json(incidents);
+    res.json(incidents);
   } catch (err) {
     res.status(500).json({ error: "Failed to fetch incidents" });
   }
 };
 
-// 🚫 BLOCKED IPs
+// BLOCK IP
 exports.blockIP = async (req, res) => {
   const { ip, reason, blockedUntil } = req.body;
-
   if (!ip) return res.status(400).json({ message: "IP is required" });
 
   try {
     const exists = await BlockedIP.findOne({ ip });
-    if (exists) {
-      return res.status(400).json({ message: "IP is already blocked" });
-    }
+    if (exists) return res.status(400).json({ message: "IP already blocked" });
 
     const payload = { ip };
-    if (blockedUntil) payload.blockedUntil = new Date(blockedUntil);
     if (reason) payload.reason = reason;
+    if (blockedUntil) payload.blockedUntil = new Date(blockedUntil);
 
     await BlockedIP.create(payload);
 
-    // Create an incident for the block action
-    const incident = await Incident.create({
+    await Incident.create({
       user: req.admin?.email || "admin",
       ip,
       type: "admin_block",
-      reason: reason || "Manually blocked by admin",
+      reason: reason || "Blocked manually by admin",
       severity: "high",
       threat: true,
     });
 
-    // send alert to dashboard/socket clients
-    emitAlert(incident);
-
-    // force logout any client with that IP
-    emitForceLogout(ip);
-
-    res.status(200).json({ message: `IP ${ip} has been blocked` });
+    res.json({ message: `IP ${ip} blocked` });
   } catch (err) {
-    console.error("Failed to block IP:", err);
+    console.error(err);
     res.status(500).json({ error: "Failed to block IP" });
   }
 };
 
+// UNBLOCK IP
 exports.unblockIP = async (req, res) => {
   const { ip } = req.body;
-  try {
-    const result = await BlockedIP.findOneAndDelete({ ip });
-    if (!result) {
-      return res.status(404).json({ message: "IP not found in block list" });
-    }
+  if (!ip) return res.status(400).json({ message: "IP is required" });
 
-    const incident = await Incident.create({
+  try {
+    const removed = await BlockedIP.findOneAndDelete({ ip });
+    if (!removed) return res.status(404).json({ message: "IP not found" });
+
+    await Incident.create({
       user: req.admin?.email || "admin",
       ip,
       type: "admin_unblock",
-      reason: "Manually unblocked by admin",
+      reason: "Unblocked manually by admin",
       severity: "low",
       threat: false,
     });
 
-    emitAlert(incident);
-
-    res.status(200).json({ message: `IP ${ip} has been unblocked` });
+    res.json({ message: `IP ${ip} unblocked` });
   } catch (err) {
-    console.error("Failed to unblock IP:", err);
+    console.error(err);
     res.status(500).json({ error: "Failed to unblock IP" });
   }
 };
 
+// GET BLOCKED IPs
 exports.getBlockedIPs = async (req, res) => {
   try {
-    const ips = await BlockedIP.find().sort({ blockedAt: -1 });
-    res.status(200).json(ips);
+    const blocked = await BlockedIP.find().sort({ blockedAt: -1 });
+    res.json(blocked);
   } catch (err) {
     res.status(500).json({ error: "Failed to fetch blocked IPs" });
   }
 };
 
-// TRUSTED IPS
+// TRUSTED IPs
 exports.addTrustedIP = async (req, res) => {
   const { user, ip, allowedFrom, allowedTo, maxLoginsPerWindow, maxUploadsPerWindow, maxRoleChangesPerWindow, quotaWindowSeconds } = req.body;
 
+  if (!user || !ip) return res.status(400).json({ message: "User and IP are required" });
+
   try {
     const exists = await TrustedIP.findOne({ user, ip });
-    if (exists) {
-      return res.status(400).json({ message: "Trusted IP already exists for this user" });
-    }
+    if (exists) return res.status(400).json({ message: "Trusted IP already exists" });
 
     await TrustedIP.create({
       user,
@@ -111,8 +100,9 @@ exports.addTrustedIP = async (req, res) => {
       quotaWindowSeconds,
     });
 
-    res.status(200).json({ message: `Trusted IP ${ip} added for user ${user}` });
+    res.json({ message: "Trusted IP added" });
   } catch (err) {
+    console.error(err);
     res.status(500).json({ error: "Failed to add trusted IP" });
   }
 };
@@ -120,26 +110,24 @@ exports.addTrustedIP = async (req, res) => {
 exports.removeTrustedIP = async (req, res) => {
   const { user, ip } = req.body;
 
-  try {
-    const result = await TrustedIP.findOneAndDelete({ user, ip });
-    if (!result) {
-      return res.status(404).json({ message: "Trusted IP not found for this user" });
-    }
+  if (!user || !ip) return res.status(400).json({ message: "User and IP are required" });
 
-    res.status(200).json({ message: `Trusted IP ${ip} removed for user ${user}` });
+  try {
+    const removed = await TrustedIP.findOneAndDelete({ user, ip });
+    if (!removed) return res.status(404).json({ message: "Trusted IP not found" });
+
+    res.json({ message: "Trusted IP removed" });
   } catch (err) {
+    console.error(err);
     res.status(500).json({ error: "Failed to remove trusted IP" });
   }
 };
 
 exports.getTrustedIPs = async (req, res) => {
-  const { user } = req.query;
-
   try {
-    const query = user ? { user } : {};
-    const trusted = await TrustedIP.find(query).sort({ addedAt: -1 });
-    res.status(200).json(trusted);
+    const trusted = await TrustedIP.find().sort({ addedAt: -1 });
+    res.json(trusted);
   } catch (err) {
     res.status(500).json({ error: "Failed to fetch trusted IPs" });
-  } 
+  }
 };

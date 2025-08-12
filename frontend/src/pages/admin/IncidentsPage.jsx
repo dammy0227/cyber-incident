@@ -1,13 +1,14 @@
 import React, { useEffect, useState } from "react";
-import { fetchIncidents } from "../../api/adminApi";
+import useAdminApi from "../../api/adminApi";
 import IncidentCard from "../../components/IncidentCard";
 
 const IncidentsPage = () => {
   const [incidents, setIncidents] = useState([]);
 
+  const { fetchIncidents } = useAdminApi();
   useEffect(() => {
     fetchIncidents().then((res) => setIncidents(res.data));
-  }, []);
+  }, [fetchIncidents]);
 
   return (
     <div>

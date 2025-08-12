@@ -1,37 +1,46 @@
-// /api/adminApi.js
+// src/api/useAdminApi.js
 import axios from "axios";
+import useAdmin from "../content/useAdmin";
 
-// Always append `/api` here so it's consistent between dev & prod
-const BASE_URL = `${import.meta.env.VITE_API_BASE_URL || "http://localhost:5000"}/api`;
+const useAdminApi = () => {
+  const { token } = useAdmin();
 
-export const loginAdmin = async (email, password) => {
-  return axios.post(`${BASE_URL}/auth/login`, { email, password });
+  const axiosInstance = axios.create({
+    baseURL: `${import.meta.env.VITE_API_BASE_URL || "http://localhost:5000"}/api`,
+  });
+
+  axiosInstance.interceptors.request.use((config) => {
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+    return config;
+  });
+
+  return {
+    loginAdmin: (email, password) =>
+      axiosInstance.post("/auth/login", { email, password }),
+
+    fetchIncidents: () =>
+      axiosInstance.get("/admin/incidents"),
+
+    getBlockedIPs: () =>
+      axiosInstance.get("/admin/blocked-ips"),
+
+    blockIP: (ip) =>
+      axiosInstance.post("/admin/block-ip", { ip }),
+
+    unblockIP: (ip) =>
+      axiosInstance.post("/admin/unblock-ip", { ip }),
+
+    getTrustedIPs: (user = "") =>
+      axiosInstance.get("/admin/trusted-ips", { params: { user } }),
+
+    addTrustedIP: (user, ip, restrictions = {}) =>
+      axiosInstance.post("/admin/add-trusted-ip", { user, ip, ...restrictions }),
+
+    removeTrustedIP: (user, ip) =>
+      axiosInstance.post("/admin/remove-trusted-ip", { user, ip }),
+  };
 };
 
-export const fetchIncidents = async () => {
-  return axios.get(`${BASE_URL}/admin/incidents`);
-};
-
-export const getBlockedIPs = async () => {
-  return axios.get(`${BASE_URL}/admin/blocked-ips`);
-};
-
-export const blockIP = async (ip) => {
-  return axios.post(`${BASE_URL}/admin/block-ip`, { ip });
-};
-
-export const unblockIP = async (ip) => {
-  return axios.post(`${BASE_URL}/admin/unblock-ip`, { ip });
-};
-
-export const getTrustedIPs = async (user = "") => {
-  return axios.get(`${BASE_URL}/admin/trusted-ips`, { params: { user } });
-};
-
-export const addTrustedIP = async (user, ip) => {
-  return axios.post(`${BASE_URL}/admin/add-trusted-ip`, { user, ip });
-};
-
-export const removeTrustedIP = async (user, ip) => {
-  return axios.post(`${BASE_URL}/admin/remove-trusted-ip`, { user, ip });
-};
+export default useAdminApi;
