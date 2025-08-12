@@ -35,16 +35,22 @@ client.login(DISCORD_BOT_TOKEN)
 // Send alert messages to the configured Discord channel
 async function sendAlertMessage(message) {
   try {
-    console.log('Sending Discord alert:', message);
+    console.log("Sending Discord alert:", message);
+
+    console.log("Fetching Discord channel...");
     const channel = await client.channels.fetch(ALERT_CHANNEL_ID);
+
     if (!channel) {
-      console.warn('Alert channel not found.');
+      console.warn("Alert channel not found.");
       return;
     }
+
+    console.log("Channel found, sending message...");
     await channel.send(message);
-    console.log('Alert sent successfully.');
+
+    console.log("Message sent to Discord successfully.");
   } catch (err) {
-    console.error('Failed to send alert message:', err);
+    console.error("Failed to send alert message:", err);
   }
 }
 
