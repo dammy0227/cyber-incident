@@ -1,44 +1,43 @@
-import React, { useState } from "react";
+import React from "react";
 import useUser from "../../content/useUser";
 import { loginUser } from "../../api/userApi";
 import './dashboards.css';
 
 const UserLoginPage = () => {
-  const [email, setEmail] = useState("");
-  const { login } = useUser();
+  const { email, login, logout } = useUser();
 
-const handleSubmit = async (e) => {
-  e.preventDefault();
-  console.log("handleSubmit called");
-  if (!email.trim()) {
-    alert("Please enter your email.");
-    return;
-  }
-
-  try {
-    console.log("Attempting login for:", email);
-    const res = await loginUser(email);
-    console.log("Response data:", res.data);
-
-    alert(res.data.message || "No message from server");
-
-    if (res.data.restricted) {
-      alert(res.data.message);
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!email || !email.trim()) {
+      alert("Please enter your email.");
       return;
     }
 
-    const ip = res.data.ip || "unknown";
-    login(email, ip);
-    console.log("User logged in:", email, ip);
+    try {
+      console.log("Attempting login for:", email);
+      const res = await loginUser(email);
+      console.log("Response data:", res.data);
 
-    setEmail("");
-    console.log("Email state after clear:", email); // should be empty string here
+      alert(res.data.message || "No message from server");
 
-  } catch (err) {
-    alert("❌ Login failed. Please try again.");
-    console.error("Login error:", err);
-  }
-};
+      if (res.data.restricted) {
+        alert(res.data.message);
+        return;
+      }
+
+      const ip = res.data.ip || "unknown";
+      login(email, ip);
+      console.log("User logged in:", email, ip);
+
+      // Clear email after login
+      logout();
+      console.log("Email state after clear:", email); // will be null now
+
+    } catch (err) {
+      alert("❌ Login failed. Please try again.");
+      console.error("Login error:", err);
+    }
+  };
 
   return (
     <div className="user-login-container">
@@ -47,8 +46,8 @@ const handleSubmit = async (e) => {
         <input
           type="email"
           placeholder="Your email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
+          value={email || ""}
+          onChange={(e) => login(e.target.value, null)} // update email only
           className="login-input"
           required
         />

@@ -9,6 +9,7 @@ import DashboardPage from "./pages/admin/DashboardPage";
 import UserDashboardPage from "./pages/user/UserDashboardPage";
 
 import './App.css'
+import TestCors from "./TestCors";
 
 const AppRoutes = () => {
   return (
@@ -16,6 +17,7 @@ const AppRoutes = () => {
       <Route path="/admin/login" element={<AdminLoginPage />} />
       <Route path="/admin/dashboard" element={<DashboardPage />} />
       <Route path="/" element={<UserDashboardPage />} /> 
+      <Route path="/test" element={<TestCors />} />
     </Routes>
   );
 };
