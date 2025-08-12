@@ -12,28 +12,33 @@ const authRoutes = require("./routes/auth");
 
 const app = express();
 
-app.use(cors({
+const corsOptions = {
   origin: [
     "http://localhost:5173",
     "https://cyber-incident-beta.vercel.app"
   ],
   methods: ["GET", "POST", "PUT", "DELETE"],
-  credentials: true
-}));
+  credentials: true,
+};
 
+app.use(cors(corsOptions));
 app.use(express.json());
+
 
 connectDB();
 
-app.get("/test-cors", (req, res) => {
-  res.json({ message: "CORS works!" });
+
+
+app.get("/api/test-cors", (req, res) => {
+  res.json({ message: "CORS and server working!" });
 });
 
+
 app.use("/api/events", eventRoutes);
-app.use("/api/admin", adminRoutes);
+app.use("/api/admin", adminRoutes); 
 app.use("/api/auth", authRoutes);
 
-app.get("/", (req, res) => {
+app.get("/", (req, res) => {   
   res.send("🌐 Cyber Incident Management API is running.");
 });
 
