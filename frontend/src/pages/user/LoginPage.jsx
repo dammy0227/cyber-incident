@@ -9,6 +9,7 @@ const UserLoginPage = () => {
 
 const handleSubmit = async (e) => {
   e.preventDefault();
+  console.log("handleSubmit called");
   if (!email.trim()) {
     alert("Please enter your email.");
     return;
