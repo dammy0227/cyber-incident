@@ -15,14 +15,19 @@ exports.getAllIncidents = async (req, res) => {
 
 // BLOCK IP
 exports.blockIP = async (req, res) => {
-  const { ip, reason, blockedUntil } = req.body;
-  if (!ip) return res.status(400).json({ message: "IP is required" });
+  const { ip, user, reason, blockedUntil } = req.body;
+
+  if (!ip && !user) {
+    return res.status(400).json({ message: "IP or user email is required" });
+  }
 
   try {
-    const exists = await BlockedIP.findOne({ ip });
-    if (exists) return res.status(400).json({ message: "IP already blocked" });
+    const exists = await BlockedIP.findOne({ $or: [{ ip }, { user }] });
+    if (exists) return res.status(400).json({ message: "Already blocked" });
 
-    const payload = { ip };
+    const payload = {};
+    if (ip) payload.ip = ip;
+    if (user) payload.user = user;
     if (reason) payload.reason = reason;
     if (blockedUntil) payload.blockedUntil = new Date(blockedUntil);
 
@@ -30,17 +35,44 @@ exports.blockIP = async (req, res) => {
 
     await Incident.create({
       user: req.admin?.email || "admin",
-      ip,
+      ip: ip || "N/A",
       type: "admin_block",
       reason: reason || "Blocked manually by admin",
       severity: "high",
       threat: true,
     });
 
-    res.json({ message: `IP ${ip} blocked` });
+    res.json({ message: `${ip ? "IP" : "User"} blocked successfully.` });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: "Failed to block IP" });
+    res.status(500).json({ error: "Failed to block" });
+  }
+};
+
+exports.unblockIP = async (req, res) => {
+  const { ip, user } = req.body;
+
+  if (!ip && !user) {
+    return res.status(400).json({ message: "IP or user email is required" });
+  }
+
+  try {
+    const removed = await BlockedIP.findOneAndDelete({ $or: [{ ip }, { user }] });
+    if (!removed) return res.status(404).json({ message: "Not found" });
+
+    await Incident.create({
+      user: req.admin?.email || "admin",
+      ip: ip || "N/A",
+      type: "admin_unblock",
+      reason: "Unblocked manually by admin",
+      severity: "low",
+      threat: false,
+    });
+
+    res.json({ message: `${ip ? "IP" : "User"} unblocked successfully.` });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to unblock" });
   }
 };
 

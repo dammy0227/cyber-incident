@@ -7,6 +7,7 @@ const RoleChangePage = () => {
   const { email: userEmail } = useUser();
   const [oldRole, setOldRole] = useState("");
   const [newRole, setNewRole] = useState("");
+  const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -21,20 +22,25 @@ const RoleChangePage = () => {
       return;
     }
 
+    setLoading(true);
+
     try {
       const res = await changeRole(userEmail, oldRole, newRole);
 
       if (res.data.restricted) {
         alert(res.data.message);
-        return;
+        return; // Stop here if restricted, don't clear form
       }
 
       alert("✅ Role change simulated.");
+      // Clear inputs after successful submission
       setOldRole("");
       setNewRole("");
     } catch (err) {
       alert("❌ Failed to simulate role change.");
       console.error(err);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -47,14 +53,18 @@ const RoleChangePage = () => {
           value={oldRole}
           onChange={(e) => setOldRole(e.target.value)}
           className="role-input"
+          disabled={loading}
         />
         <input
           placeholder="New Role"
           value={newRole}
           onChange={(e) => setNewRole(e.target.value)}
           className="role-input"
+          disabled={loading}
         />
-        <button type="submit" className="role-button">Change Role</button>
+        <button type="submit" className="role-button" disabled={loading}>
+          {loading ? "Changing Role..." : "Change Role"}
+        </button>
       </form>
     </div>
   );

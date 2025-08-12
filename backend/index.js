@@ -1,14 +1,16 @@
-// server.js (or app.js)
 const express = require("express");
 const cors = require("cors");
 const dotenv = require("dotenv");
 const connectDB = require("./config/db");
 
+// Load environment variables as early as possible
+dotenv.config();
+
+const { client } = require("../backend/discordBot"); // Import Discord client
+
 const eventRoutes = require("./routes/events");
 const adminRoutes = require("./routes/admin");
 const authRoutes = require("./routes/auth");
-
-dotenv.config();
 
 const app = express();
 
@@ -40,3 +42,8 @@ const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
 });
+
+// Login Discord bot
+client.login(process.env.DISCORD_BOT_TOKEN)
+  .then(() => console.log("🤖 Discord bot logged in"))
+  .catch(err => console.error("Discord bot login failed:", err));

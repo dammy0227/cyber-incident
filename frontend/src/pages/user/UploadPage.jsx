@@ -7,6 +7,9 @@ const UploadPage = () => {
   const { email } = useUser();
   const [loading, setLoading] = useState(false);
 
+  // This ref or function will be passed to FileUploader to clear the input after upload
+  const [clearFileInput, setClearFileInput] = useState(false);
+
   const handleUpload = async (file) => {
     if (!email) {
       alert("⚠️ You must be logged in to upload files.");
@@ -24,20 +27,37 @@ const UploadPage = () => {
         return;
       }
 
-      // Optionally: reset uploader or additional success logic
+      // Clear the file input after successful upload
+      setClearFileInput(true);
 
     } catch (error) {
       console.error("Upload error:", error);
-      alert("❌ Upload failed.");
+
+      if (error.response && error.response.status === 403) {
+        alert("⚠️ Suspicious file upload, blocked: " + (error.response.data.message || ""));
+      } else {
+        alert("❌ Upload failed.");
+      }
+
+      // Clear file input even on failure, if you want
+      setClearFileInput(true);
     } finally {
       setLoading(false);
     }
   };
 
+  // Reset clearFileInput after it triggers (to allow next clear)
+  const onFileInputCleared = () => setClearFileInput(false);
+
   return (
     <div className="upload-page">
       <h2>📤 Upload File</h2>
-      <FileUploader onUpload={handleUpload} disabled={!email || loading} />
+      <FileUploader
+        onUpload={handleUpload}
+        disabled={!email || loading}
+        clearInput={clearFileInput}
+        onClear={onFileInputCleared}
+      />
       {loading && <p>Uploading file, please wait...</p>}
     </div>
   );

@@ -17,13 +17,7 @@ const handleSubmit = async (e) => {
   try {
     console.log("Attempting login for:", email);
     const res = await loginUser(email);
-    console.log("Response object:", res);
     console.log("Response data:", res.data);
-
-    if (!res || !res.data) {
-      alert("❌ Unexpected response from server.");
-      return;
-    }
 
     alert(res.data.message || "No message from server");
 
@@ -36,8 +30,9 @@ const handleSubmit = async (e) => {
     login(email, ip);
     console.log("User logged in:", email, ip);
 
-    alert("✅ User login successful.");
     setEmail("");
+    console.log("Email state after clear:", email); // should be empty string here
+
   } catch (err) {
     alert("❌ Login failed. Please try again.");
     console.error("Login error:", err);
