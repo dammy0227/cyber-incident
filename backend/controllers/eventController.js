@@ -3,7 +3,8 @@ const Incident = require("../models/Incident");
 const BlockedIP = require("../models/BlockedIP");
 const TrustedIP = require("../models/TrustedIP");
 const analyzeEvent = require("../ai/aiEngine");
-const { sendAlertMessage } = require("../discordBot");
+const { sendAlertMessage } = require('../discordBot');
+
 
 const getIP = (req) => {
   const xForwardedFor = req.headers["x-forwarded-for"];

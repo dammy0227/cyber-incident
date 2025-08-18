@@ -11,14 +11,14 @@ const UserProvider = ({ children }) => {
 
     console.log("🔁 Restoring from localStorage:", storedEmail, storedIP);
     if (storedEmail) setEmail(storedEmail);
-    if (storedIP) setIP(storedIP);
+    if (storedIP && storedIP !== "") setIP(storedIP);
   }, []);
 
   const login = (userEmail, newIP) => {
     setEmail(userEmail);
-    setIP(newIP);
+    setIP(newIP || ""); // Store empty string if no IP
     localStorage.setItem("email", userEmail);
-    localStorage.setItem("ip", newIP);
+    localStorage.setItem("ip", newIP || "");
   };
 
   const logout = () => {

@@ -2,8 +2,9 @@ const express = require("express");
 const cors = require("cors");
 const dotenv = require("dotenv");
 const connectDB = require("./config/db");
-const { client } = require("../backend/discordBot");
+const { client } = require("./discordBot"); // ✅ Import client first
 
+// Load environment variables
 dotenv.config();
 
 const eventRoutes = require("./routes/events");
@@ -12,6 +13,7 @@ const authRoutes = require("./routes/auth");
 
 const app = express();
 
+// ✅ CORS configuration
 const corsOptions = {
   origin: [
     "http://localhost:5173",
@@ -24,35 +26,35 @@ const corsOptions = {
 app.use(cors(corsOptions));
 app.use(express.json());
 
+// ✅ Connect to MongoDB
+connectDB()
+  .then(() => console.log("✅ MongoDB connected"))
+  .catch((err) => {
+    console.error("❌ MongoDB connection failed:", err);
+    process.exit(1);
+  });
 
-connectDB();
-
-
-
+// ✅ Test route
 app.get("/api/test-cors", (req, res) => {
   res.json({ message: "CORS and server working!" });
 });
 
-
+// ✅ API routes
 app.use("/api/events", eventRoutes);
-app.use("/api/admin", adminRoutes); 
+app.use("/api/admin", adminRoutes);
 app.use("/api/auth", authRoutes);
 
-app.get("/", (req, res) => {   
+// ✅ Root route
+app.get("/", (req, res) => {
   res.send("🌐 Cyber Incident Management API is running.");
 });
-
-app.get("/test-cors", (req, res) => {
-  res.json({ message: "CORS works!" });
-});
-
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
 });
 
+// ✅ Discord bot login
 client.login(process.env.DISCORD_BOT_TOKEN)
   .then(() => console.log("🤖 Discord bot logged in"))
-  .catch(err => console.error("Discord bot login failed:", err));
-
+  .catch(err => console.error("❌ Discord bot login failed:", err));

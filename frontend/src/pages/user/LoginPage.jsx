@@ -1,37 +1,33 @@
-import React from "react";
+import React, { useState } from "react";
 import useUser from "../../content/useUser";
 import { loginUser } from "../../api/userApi";
 import './dashboards.css';
 
 const UserLoginPage = () => {
-  const { email, login, logout } = useUser();
+  const { login } = useUser();
+  const [inputEmail, setInputEmail] = useState("");
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!email || !email.trim()) {
+    if (!inputEmail.trim()) {
       alert("Please enter your email.");
       return;
     }
 
     try {
-      console.log("Attempting login for:", email);
-      const res = await loginUser(email);
+      console.log("Attempting login for:", inputEmail);
+      const res = await loginUser(inputEmail);
       console.log("Response data:", res.data);
 
       alert(res.data.message || "No message from server");
 
       if (res.data.restricted) {
-        alert(res.data.message);
-        return;
+        return; // Stop if restricted
       }
 
       const ip = res.data.ip || "unknown";
-      login(email, ip);
-      console.log("User logged in:", email, ip);
-
-      // Clear email after login
-      logout();
-      console.log("Email state after clear:", email); // will be null now
+      login(inputEmail, ip);
+      setInputEmail(""); // Clear input field
 
     } catch (err) {
       alert("❌ Login failed. Please try again.");
@@ -46,8 +42,8 @@ const UserLoginPage = () => {
         <input
           type="email"
           placeholder="Your email"
-          value={email || ""}
-          onChange={(e) => login(e.target.value, null)} // update email only
+          value={inputEmail}
+          onChange={(e) => setInputEmail(e.target.value)}
           className="login-input"
           required
         />

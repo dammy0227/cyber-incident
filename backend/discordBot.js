@@ -1,65 +1,58 @@
-// discordBot.js
-require('dotenv').config(); // Load environment variables early
+require('dotenv').config();
 
 const { Client, GatewayIntentBits } = require('discord.js');
 const BlockedIP = require('./models/BlockedIP');
 const Incident = require('./models/Incident');
 
-// Create a new Discord client with required intents
 const client = new Client({
   intents: [
-    GatewayIntentBits.Guilds,           // Access guild (server) info
-    GatewayIntentBits.GuildMessages,    // Listen for guild messages
-    GatewayIntentBits.MessageContent    // Access message content
-  ]
+    GatewayIntentBits.Guilds,
+    GatewayIntentBits.GuildMessages,
+    GatewayIntentBits.MessageContent,
+  ],
 });
 
-// Read token and alert channel ID from environment variables
 const DISCORD_BOT_TOKEN = process.env.DISCORD_BOT_TOKEN;
 const ALERT_CHANNEL_ID = process.env.DISCORD_ALERT_CHANNEL_ID;
 
-// Check for presence of token before login
 if (!DISCORD_BOT_TOKEN) {
-  console.error('Error: DISCORD_BOT_TOKEN is not set in environment variables.');
+  console.error('Error: DISCORD_BOT_TOKEN is not set.');
   process.exit(1);
 }
 
-// Login the Discord client
-client.login(DISCORD_BOT_TOKEN)
-  .then(() => console.log(`🤖 Discord bot logged in as ${client.user.tag}`))
-  .catch(err => {
-    console.error('Discord bot login failed:', err);
-    process.exit(1);
-  });
+client.login(DISCORD_BOT_TOKEN);
 
-// Send alert messages to the configured Discord channel
+client.once('ready', () => {
+  console.log(`🤖 Discord bot logged in as ${client.user.tag}`);
+});
+
+client.on('error', (err) => {
+  console.error('Discord client error:', err);
+});
+
 async function sendAlertMessage(message) {
   try {
-    console.log("Sending Discord alert:", message);
+    if (!client.isReady()) {
+      console.warn("Discord client not ready, cannot send alert.");
+      return;
+    }
 
-    console.log("Fetching Discord channel...");
     const channel = await client.channels.fetch(ALERT_CHANNEL_ID);
-
     if (!channel) {
       console.warn("Alert channel not found.");
       return;
     }
 
-    console.log("Channel found, sending message...");
     await channel.send(message);
-
     console.log("Message sent to Discord successfully.");
   } catch (err) {
     console.error("Failed to send alert message:", err);
   }
 }
 
-// Listen for Discord messages to support admin commands (!block, !unblock)
 client.on('messageCreate', async (message) => {
-  // Ignore messages from bots (including itself)
   if (message.author.bot) return;
 
-  // Command to block an IP: !block <ip> [reason]
   if (message.content.startsWith('!block ')) {
     const args = message.content.split(' ');
     const ip = args[1];
@@ -82,7 +75,7 @@ client.on('messageCreate', async (message) => {
           type: 'admin_block',
           reason,
           severity: 'high',
-          threat: true
+          threat: true,
         });
         message.reply(`IP ${ip} blocked successfully.`);
       }
@@ -92,7 +85,6 @@ client.on('messageCreate', async (message) => {
     }
   }
 
-  // Command to unblock an IP: !unblock <ip>
   if (message.content.startsWith('!unblock ')) {
     const args = message.content.split(' ');
     const ip = args[1];
@@ -113,7 +105,7 @@ client.on('messageCreate', async (message) => {
           type: 'admin_unblock',
           reason: 'Unblocked via Discord command',
           severity: 'low',
-          threat: false
+          threat: false,
         });
         message.reply(`IP ${ip} unblocked successfully.`);
       }
@@ -124,5 +116,4 @@ client.on('messageCreate', async (message) => {
   }
 });
 
-// Export client and alert function for use in other files
 module.exports = { sendAlertMessage, client };
