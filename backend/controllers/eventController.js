@@ -1,171 +1,109 @@
-// controllers/eventController.js
-const Incident = require("../models/Incident");
-const BlockedIP = require("../models/BlockedIP");
-const TrustedIP = require("../models/TrustedIP");
-const analyzeEvent = require("../ai/aiEngine");
-const { sendAlertMessage } = require('../discordBot');
+const { 
+  Client, 
+  GatewayIntentBits, 
+  Partials, 
+  ActionRowBuilder, 
+  ButtonBuilder, 
+  ButtonStyle, 
+  Events 
+} = require("discord.js");
+const mongoose = require("mongoose");
+require("dotenv").config();
 
+// ✅ Import models
+const BlockedIP = require("./models/BlockedIP");
+const Incident = require("./models/Incident");
 
-const getIP = (req) => {
-  const xForwardedFor = req.headers["x-forwarded-for"];
-  if (xForwardedFor) {
-    return xForwardedFor.split(",")[0].trim();
+// Create Discord client
+const client = new Client({
+  intents: [GatewayIntentBits.Guilds],
+  partials: [Partials.Channel],
+});
+
+// MongoDB connection
+mongoose.connect(process.env.MONGO_URI, { useNewUrlParser: true, useUnifiedTopology: true })
+  .then(() => console.log("✅ MongoDB connected"))
+  .catch((err) => console.error("❌ MongoDB error:", err));
+
+client.once(Events.ClientReady, () => {
+  console.log(`🤖 Discord bot logged in as ${client.user.tag}`);
+});
+
+// Function to create action row dynamically
+function createButtons(isBlocked) {
+  const row = new ActionRowBuilder();
+
+  if (isBlocked) {
+    row.addComponents(
+      new ButtonBuilder()
+        .setCustomId("unblock_ip")
+        .setLabel("✅ Unblock IP")
+        .setStyle(ButtonStyle.Success)
+    );
+  } else {
+    row.addComponents(
+      new ButtonBuilder()
+        .setCustomId("block_ip")
+        .setLabel("🚫 Block IP")
+        .setStyle(ButtonStyle.Danger)
+    );
   }
-  return req.connection.remoteAddress || req.ip;
-};
 
-async function processIncident(user, ip, type, details) {
-  const result = await analyzeEvent({ user, ip, type, ...details });
-
-  const incident = await Incident.create({
-    user,
-    ip,
-    type,
-    reason: result.reason || `${type} event`,
-    severity: result.severity || "low",
-    threat: Boolean(result.threat),
-    file: details.file,
-    roleChange: details.roleChange,
-  });
-
-  // Auto-block if high threat and IP not blocked yet
-  if (result.threat && result.severity === "high") {
-    const blocked = await BlockedIP.findOne({ ip });
-    if (!blocked) {
-      await BlockedIP.create({ ip, reason: result.reason });
-    }
-  }
-
-  return { result, incident };
+  return row;
 }
 
-exports.handleLogin = async (req, res) => {
-  const { user } = req.body;
-  const ip = getIP(req);
+// Example: send incident with buttons
+async function sendIncidentMessage(channelId, ip) {
+  const channel = await client.channels.fetch(channelId);
 
-  console.log(`[LOGIN] User: ${user} IP: ${ip}`);
+  const row = createButtons(false); // start with Block button
 
-  if (!user) return res.status(400).json({ error: "User email required" });
+  await channel.send({
+    content: `⚠️ Suspicious activity detected from **${ip}**`,
+    components: [row],
+  });
+}
 
-  try {
-    // Check if IP or user is blocked
-    const blockedEntry = await BlockedIP.findOne({ $or: [{ ip }, { user }] });
-    if (blockedEntry) {
-      await sendAlertMessage(
-        `⛔ **Blocked login attempt**\nUser: ${user}\nIP: ${ip}\nReason: ${blockedEntry.reason || "Blocked by admin"}`
-      );
-      return res.status(403).json({
-        message: "Login denied: user or IP is blocked.",
-        ip,
-        user,
-        reason: blockedEntry.reason || "Blocked by admin",
-      });
-    }
+// Handle button clicks
+client.on(Events.InteractionCreate, async (interaction) => {
+  if (!interaction.isButton()) return;
 
-    // Process incident analysis
-    const { result } = await processIncident(user, ip, "login", {});
-
-    // Send Discord alert
-    await sendAlertMessage(
-      `🔐 **Login attempt**\nUser: ${user}\nIP: ${ip}\nThreat: ${result.threat}\nReason: ${result.reason}`
-    );
-
-    if (result.threat && result.severity === "high") {
-      const alreadyBlocked = await BlockedIP.findOne({ ip });
-      if (!alreadyBlocked) {
-        await BlockedIP.create({ ip, reason: result.reason });
-      }
-      return res.status(403).json({
-        message: "Login denied: suspicious activity detected.",
-        ip,
-        reason: result.reason,
-      });
-    }
-
-    res.json({
-      message: result.threat ? "Suspicious login" : "Login successful",
-      threat: result.threat,
-      reason: result.reason,
-      severity: result.severity,
-      ip,
-    });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Internal server error" });
-  }
-};
-
-exports.handleUpload = async (req, res) => {
-  const { user } = req.body;
-  const ip = getIP(req);
-  const file = req.file;
-
-  if (!user) return res.status(400).json({ error: "User email required" });
-  if (!file) return res.status(400).json({ error: "File required" });
+  const ip = "192.168.1.10"; // ⚠️ Example IP, replace with dynamic
 
   try {
-    // Skip AI analysis for trusted IPs
-    const trusted = await TrustedIP.findOne({ user, ip });
-    if (trusted) {
-      await Incident.create({
-        user,
-        ip,
-        type: "upload",
-        reason: "Trusted IP upload - bypass AI",
-        severity: "low",
-        threat: false,
-        file: { name: file.originalname, size: file.size },
-      });
-
-      await sendAlertMessage(
-        `📁 **Trusted file upload**\nUser: ${user}\nIP: ${ip}\nFile: ${file.originalname} (${file.size} bytes)\nStatus: Trusted`
+    if (interaction.customId === "block_ip") {
+      await BlockedIP.updateOne(
+        { ip },
+        { ip, reason: "Suspicious activity", blockedAt: new Date() },
+        { upsert: true }
       );
 
-      return res.json({ message: "File uploaded (trusted IP)" });
+      await interaction.update({
+        content: `🚫 IP **${ip}** has been blocked.`,
+        components: [createButtons(true)], // show Unblock button
+      });
     }
 
-    const { result } = await processIncident(user, ip, "upload", {
-      file: { name: file.originalname, size: file.size },
-    });
+    if (interaction.customId === "unblock_ip") {
+      await BlockedIP.deleteOne({ ip });
 
-    await sendAlertMessage(
-      `📁 **File upload**\nUser: ${user}\nIP: ${ip}\nFile: ${file.originalname} (${file.size} bytes)\nThreat: ${result.threat}\nReason: ${result.reason}`
-    );
-
-    if (result.threat) {
-      return res.status(403).json({ message: result.reason, severity: result.severity });
+      await interaction.update({
+        content: `✅ IP **${ip}** has been unblocked.`,
+        components: [createButtons(false)], // show Block button
+      });
     }
-
-    res.json({ message: "File uploaded successfully" });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Internal server error" });
-  }
-};
-
-exports.handleRoleChange = async (req, res) => {
-  const { user, oldRole, newRole } = req.body;
-  const ip = getIP(req);
-
-  if (!user || !oldRole || !newRole)
-    return res.status(400).json({ error: "Missing role change info" });
-
-  try {
-    const { result } = await processIncident(user, ip, "role_change", {
-      roleChange: { oldRole, newRole },
-    });
-
-    await sendAlertMessage(
-      `⚙️ **Role change**\nUser: ${user}\nIP: ${ip}\nFrom: ${oldRole}\nTo: ${newRole}\nThreat: ${result.threat}\nReason: ${result.reason}`
-    );
-
-    if (result.threat) {
-      return res.status(403).json({ message: result.reason, severity: result.severity });
+    console.error("❌ Interaction error:", err);
+    if (!interaction.replied && !interaction.deferred) {
+      await interaction.reply({
+        content: "⚠️ Something went wrong.",
+        ephemeral: true,
+      });
     }
-
-    res.json({ message: "Role changed successfully" });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Internal server error" });
   }
-};
+});
+
+// Start bot
+client.login(process.env.DISCORD_TOKEN);
+
+module.exports = { sendIncidentMessage };

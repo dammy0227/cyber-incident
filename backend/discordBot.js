@@ -4,8 +4,8 @@ const {
   Client, GatewayIntentBits, REST, Routes, 
   SlashCommandBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle 
 } = require("discord.js");
-const BlockedIP = require("./models/BlockedIP");   // fixed path
-const Incident = require("./models/Incident");     // fixed path
+const BlockedIP = require("./models/BlockedIP");   // adjust path if needed
+const Incident = require("./models/Incident");     // adjust path if needed
 
 // ---- 1. Setup Bot ----
 const client = new Client({
@@ -55,7 +55,12 @@ client.on("interactionCreate", async (interaction) => {
         const ip = interaction.options.getString("ip");
         const reason = interaction.options.getString("reason") || "Blocked via Discord";
 
-        await BlockedIP.create({ ip, reason });
+        await BlockedIP.findOneAndUpdate(
+          { ip },
+          { ip, reason, blockedAt: new Date() },
+          { upsert: true, new: true }
+        );
+
         await Incident.create({
           user: interaction.user.tag,
           ip,
@@ -101,7 +106,12 @@ client.on("interactionCreate", async (interaction) => {
       const [action, ip] = interaction.customId.split("_");
 
       if (action === "block") {
-        await BlockedIP.create({ ip, reason: "Blocked via Discord button" });
+        await BlockedIP.findOneAndUpdate(
+          { ip },
+          { ip, reason: "Blocked via Discord button", blockedAt: new Date() },
+          { upsert: true, new: true }
+        );
+
         await Incident.create({
           user: interaction.user.tag,
           ip,
@@ -113,7 +123,14 @@ client.on("interactionCreate", async (interaction) => {
 
         await interaction.update({
           content: `🚫 IP **${ip}** blocked via button.`,
-          components: [],
+          components: [
+            new ActionRowBuilder().addComponents(
+              new ButtonBuilder()
+                .setCustomId(`unblock_${ip}`)
+                .setLabel("Unblock")
+                .setStyle(ButtonStyle.Success)
+            )
+          ],
         });
       }
 
@@ -130,7 +147,14 @@ client.on("interactionCreate", async (interaction) => {
 
         await interaction.update({
           content: `✅ IP **${ip}** unblocked via button.`,
-          components: [],
+          components: [
+            new ActionRowBuilder().addComponents(
+              new ButtonBuilder()
+                .setCustomId(`block_${ip}`)
+                .setLabel("Block")
+                .setStyle(ButtonStyle.Danger)
+            )
+          ],
         });
       }
     }
@@ -173,5 +197,5 @@ async function sendAlertMessage(user, ip) {
   }
 }
 
-// ---- Export client + sendAlertMessage ----
+// ---- 5. Export client + alert sender ----
 module.exports = { client, sendAlertMessage };
