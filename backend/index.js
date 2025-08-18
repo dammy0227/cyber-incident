@@ -1,4 +1,3 @@
-// backend/index.js
 const express = require("express");
 const cors = require("cors");
 const dotenv = require("dotenv");
@@ -13,6 +12,9 @@ const adminRoutes = require("./routes/admin");
 const authRoutes = require("./routes/auth");
 
 const app = express();
+
+// ✅ Tell Express to trust proxies (important for Render, Vercel, Nginx)
+app.set("trust proxy", true);
 
 // ✅ CORS configuration
 const corsOptions = {

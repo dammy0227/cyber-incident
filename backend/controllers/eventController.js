@@ -5,13 +5,32 @@ const TrustedIP = require("../models/TrustedIP");
 const analyzeEvent = require("../ai/aiEngine");
 const { sendAlertMessage } = require('../discordBot');
 
-
+// ✅ Improved IP helper
 const getIP = (req) => {
-  const xForwardedFor = req.headers["x-forwarded-for"];
-  if (xForwardedFor) {
-    return xForwardedFor.split(",")[0].trim();
+  try {
+    const xForwardedFor = req.headers["x-forwarded-for"];
+    let ip = null;
+
+    if (xForwardedFor) {
+      ip = xForwardedFor.split(",")[0].trim();
+    } else {
+      ip =
+        req.ip ||
+        req.connection?.remoteAddress ||
+        req.socket?.remoteAddress ||
+        req.connection?.socket?.remoteAddress;
+    }
+
+    // Normalize for local/dev
+    if (!ip || ip === "::1" || ip.startsWith("127.") || ip === "unknown") {
+      return "localhost";
+    }
+
+    return ip;
+  } catch (err) {
+    console.error("Error getting IP:", err);
+    return "localhost";
   }
-  return req.connection.remoteAddress || req.ip;
 };
 
 async function processIncident(user, ip, type, details) {
