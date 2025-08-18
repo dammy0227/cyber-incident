@@ -1,119 +1,129 @@
-require('dotenv').config();
+// backend/bot/discordBot.js
+require("dotenv").config();
+const { 
+  Client, GatewayIntentBits, REST, Routes, 
+  SlashCommandBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle 
+} = require("discord.js");
+const BlockedIP = require("./models/BlockedIP");  // 👈 fixed path
+const Incident = require("./models/Incident");    // 👈 fixed path
 
-const { Client, GatewayIntentBits } = require('discord.js');
-const BlockedIP = require('./models/BlockedIP');
-const Incident = require('./models/Incident');
-
+// ---- 1. Setup Bot ----
 const client = new Client({
-  intents: [
-    GatewayIntentBits.Guilds,
-    GatewayIntentBits.GuildMessages,
-    GatewayIntentBits.MessageContent,
-  ],
+  intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages],
 });
 
-const DISCORD_BOT_TOKEN = process.env.DISCORD_BOT_TOKEN;
-const ALERT_CHANNEL_ID = process.env.DISCORD_ALERT_CHANNEL_ID;
+// ---- 2. Register Slash Commands ----
+const commands = [
+  new SlashCommandBuilder()
+    .setName("block")
+    .setDescription("Block an attacker IP")
+    .addStringOption(opt =>
+      opt.setName("ip").setDescription("IP to block").setRequired(true)
+    )
+    .addStringOption(opt =>
+      opt.setName("reason").setDescription("Reason for blocking").setRequired(false)
+    ),
+  new SlashCommandBuilder()
+    .setName("unblock")
+    .setDescription("Unblock an attacker IP")
+    .addStringOption(opt =>
+      opt.setName("ip").setDescription("IP to unblock").setRequired(true)
+    ),
+].map(cmd => cmd.toJSON());
 
-if (!DISCORD_BOT_TOKEN) {
-  console.error('Error: DISCORD_BOT_TOKEN is not set.');
-  process.exit(1);
-}
+const rest = new REST({ version: "10" }).setToken(process.env.DISCORD_BOT_TOKEN);
 
-client.login(DISCORD_BOT_TOKEN);
-
-client.once('ready', () => {
-  console.log(`🤖 Discord bot logged in as ${client.user.tag}`);
-});
-
-client.on('error', (err) => {
-  console.error('Discord client error:', err);
-});
-
-async function sendAlertMessage(message) {
+(async () => {
   try {
-    if (!client.isReady()) {
-      console.warn("Discord client not ready, cannot send alert.");
-      return;
-    }
-
-    const channel = await client.channels.fetch(ALERT_CHANNEL_ID);
-    if (!channel) {
-      console.warn("Alert channel not found.");
-      return;
-    }
-
-    await channel.send(message);
-    console.log("Message sent to Discord successfully.");
+    console.log("⏳ Registering Discord slash commands...");
+    await rest.put(
+      Routes.applicationCommands(process.env.DISCORD_CLIENT_ID),
+      { body: commands }
+    );
+    console.log("✅ Slash commands registered.");
   } catch (err) {
-    console.error("Failed to send alert message:", err);
+    console.error("❌ Failed to register commands:", err);
   }
-}
+})();
 
-client.on('messageCreate', async (message) => {
-  if (message.author.bot) return;
+// ---- 3. Handle All Interactions ----
+client.on("interactionCreate", async (interaction) => {
+  try {
+    // ✅ Slash Commands
+    if (interaction.isChatInputCommand()) {
+      if (interaction.commandName === "block") {
+        const ip = interaction.options.getString("ip");
+        const reason = interaction.options.getString("reason") || "Blocked via Discord";
 
-  if (message.content.startsWith('!block ')) {
-    const args = message.content.split(' ');
-    const ip = args[1];
-    const reason = args.slice(2).join(' ') || 'Blocked via Discord command';
-
-    if (!ip) {
-      message.reply('Usage: !block <ip> [reason]');
-      return;
-    }
-
-    try {
-      const exists = await BlockedIP.findOne({ ip });
-      if (exists) {
-        message.reply(`IP ${ip} is already blocked.`);
-      } else {
         await BlockedIP.create({ ip, reason });
         await Incident.create({
-          user: message.author.tag,
+          user: interaction.user.tag,
           ip,
-          type: 'admin_block',
+          type: "admin_block",
           reason,
-          severity: 'high',
+          severity: "high",
           threat: true,
         });
-        message.reply(`IP ${ip} blocked successfully.`);
+
+        // Add Unblock button
+        const row = new ActionRowBuilder().addComponents(
+          new ButtonBuilder()
+            .setCustomId(`unblock_${ip}`)
+            .setLabel("Unblock")
+            .setStyle(ButtonStyle.Danger)
+        );
+
+        await interaction.reply({
+          content: `🚫 IP **${ip}** blocked.\nReason: ${reason}`,
+          components: [row],
+        });
       }
-    } catch (err) {
-      console.error(err);
-      message.reply('Failed to block IP.');
-    }
-  }
 
-  if (message.content.startsWith('!unblock ')) {
-    const args = message.content.split(' ');
-    const ip = args[1];
+      if (interaction.commandName === "unblock") {
+        const ip = interaction.options.getString("ip");
 
-    if (!ip) {
-      message.reply('Usage: !unblock <ip>');
-      return;
-    }
-
-    try {
-      const removed = await BlockedIP.findOneAndDelete({ ip });
-      if (!removed) {
-        message.reply(`IP ${ip} is not blocked.`);
-      } else {
+        await BlockedIP.findOneAndDelete({ ip });
         await Incident.create({
-          user: message.author.tag,
+          user: interaction.user.tag,
           ip,
-          type: 'admin_unblock',
-          reason: 'Unblocked via Discord command',
-          severity: 'low',
+          type: "admin_unblock",
+          reason: "Unblocked via Discord",
+          severity: "low",
           threat: false,
         });
-        message.reply(`IP ${ip} unblocked successfully.`);
+
+        await interaction.reply(`✅ IP **${ip}** unblocked.`);
       }
-    } catch (err) {
-      console.error(err);
-      message.reply('Failed to unblock IP.');
+    }
+
+    // ✅ Button Interactions
+    if (interaction.isButton() && interaction.customId.startsWith("unblock_")) {
+      const ip = interaction.customId.split("_")[1];
+
+      await BlockedIP.findOneAndDelete({ ip });
+      await Incident.create({
+        user: interaction.user.tag,
+        ip,
+        type: "admin_unblock",
+        reason: "Unblocked via Discord button",
+        severity: "low",
+        threat: false,
+      });
+
+      await interaction.update({
+        content: `✅ IP **${ip}** unblocked via button.`,
+        components: [],
+      });
+    }
+  } catch (err) {
+    console.error("❌ Interaction error:", err);
+    if (interaction.replied || interaction.deferred) {
+      await interaction.followUp({ content: "⚠️ Something went wrong.", ephemeral: true });
+    } else {
+      await interaction.reply({ content: "⚠️ Something went wrong.", ephemeral: true });
     }
   }
 });
 
-module.exports = { sendAlertMessage, client };
+// ---- Export client for index.js ----
+module.exports = client;

@@ -1,8 +1,9 @@
+// backend/index.js
 const express = require("express");
 const cors = require("cors");
 const dotenv = require("dotenv");
 const connectDB = require("./config/db");
-const { client } = require("./discordBot"); // ✅ Import client first
+const client = require("./discordBot"); // 👈 import bot client
 
 // Load environment variables
 dotenv.config();
@@ -33,11 +34,6 @@ connectDB()
     console.error("❌ MongoDB connection failed:", err);
     process.exit(1);
   });
-
-// ✅ Test route
-app.get("/api/test-cors", (req, res) => {
-  res.json({ message: "CORS and server working!" });
-});
 
 // ✅ API routes
 app.use("/api/events", eventRoutes);
