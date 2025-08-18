@@ -1,8 +1,14 @@
 // backend/bot/discordBot.js
 require("dotenv").config();
-const { 
-  Client, GatewayIntentBits, REST, Routes, 
-  SlashCommandBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle 
+const {
+  Client,
+  GatewayIntentBits,
+  REST,
+  Routes,
+  SlashCommandBuilder,
+  ActionRowBuilder,
+  ButtonBuilder,
+  ButtonStyle,
 } = require("discord.js");
 
 // ✅ FIX: Correct model paths
@@ -11,11 +17,7 @@ const Incident = require("./models/Incident");
 
 // ---- 1. Setup Bot ----
 const client = new Client({
-  intents: [
-    GatewayIntentBits.Guilds,
-    GatewayIntentBits.GuildMessages,
-    GatewayIntentBits.MessageContent,   // ✅ Needed for interactions
-  ],
+  intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent],
 });
 
 // ---- 2. Register Slash Commands ----
@@ -23,29 +25,20 @@ const commands = [
   new SlashCommandBuilder()
     .setName("block")
     .setDescription("Block an attacker IP")
-    .addStringOption(opt =>
-      opt.setName("ip").setDescription("IP to block").setRequired(true)
-    )
-    .addStringOption(opt =>
-      opt.setName("reason").setDescription("Reason for blocking").setRequired(false)
-    ),
+    .addStringOption((opt) => opt.setName("ip").setDescription("IP to block").setRequired(true))
+    .addStringOption((opt) => opt.setName("reason").setDescription("Reason for blocking").setRequired(false)),
   new SlashCommandBuilder()
     .setName("unblock")
     .setDescription("Unblock an attacker IP")
-    .addStringOption(opt =>
-      opt.setName("ip").setDescription("IP to unblock").setRequired(true)
-    ),
-].map(cmd => cmd.toJSON());
+    .addStringOption((opt) => opt.setName("ip").setDescription("IP to unblock").setRequired(true)),
+].map((cmd) => cmd.toJSON());
 
 const rest = new REST({ version: "10" }).setToken(process.env.DISCORD_BOT_TOKEN);
 
 (async () => {
   try {
     console.log("⏳ Registering Discord slash commands...");
-    await rest.put(
-      Routes.applicationCommands(process.env.DISCORD_CLIENT_ID),
-      { body: commands }
-    );
+    await rest.put(Routes.applicationCommands(process.env.DISCORD_CLIENT_ID), { body: commands });
     console.log("✅ Slash commands registered.");
   } catch (err) {
     console.error("❌ Failed to register commands:", err);
@@ -61,12 +54,16 @@ client.on("interactionCreate", async (interaction) => {
         const ip = interaction.options.getString("ip");
         const reason = interaction.options.getString("reason") || "Blocked via Discord";
 
-        await BlockedIP.findOneAndUpdate(
-          { ip },
-          { ip, reason, blockedAt: new Date() },
-          { upsert: true, new: true }
-        );
+        const existing = await BlockedIP.findOne({ ip });
+        if (existing) {
+          await interaction.reply({
+            content: `⚠️ IP **${ip}** is already blocked.`,
+            ephemeral: true,
+          });
+          return;
+        }
 
+        await BlockedIP.create({ ip, reason, blockedAt: new Date() });
         await Incident.create({
           user: interaction.user.tag,
           ip,
@@ -78,10 +75,7 @@ client.on("interactionCreate", async (interaction) => {
 
         // Show only UNBLOCK after block
         const row = new ActionRowBuilder().addComponents(
-          new ButtonBuilder()
-            .setCustomId(`unblock_${ip}`)
-            .setLabel("Unblock")
-            .setStyle(ButtonStyle.Success)
+          new ButtonBuilder().setCustomId(`unblock_${ip}`).setLabel("Unblock").setStyle(ButtonStyle.Success)
         );
 
         await interaction.reply({
@@ -92,6 +86,15 @@ client.on("interactionCreate", async (interaction) => {
 
       if (interaction.commandName === "unblock") {
         const ip = interaction.options.getString("ip");
+
+        const existing = await BlockedIP.findOne({ ip });
+        if (!existing) {
+          await interaction.reply({
+            content: `⚠️ IP **${ip}** is not currently blocked.`,
+            ephemeral: true,
+          });
+          return;
+        }
 
         await BlockedIP.findOneAndDelete({ ip });
         await Incident.create({
@@ -105,10 +108,7 @@ client.on("interactionCreate", async (interaction) => {
 
         // Show only BLOCK after unblock
         const row = new ActionRowBuilder().addComponents(
-          new ButtonBuilder()
-            .setCustomId(`block_${ip}`)
-            .setLabel("Block")
-            .setStyle(ButtonStyle.Danger)
+          new ButtonBuilder().setCustomId(`block_${ip}`).setLabel("Block").setStyle(ButtonStyle.Danger)
         );
 
         await interaction.reply({
@@ -118,17 +118,25 @@ client.on("interactionCreate", async (interaction) => {
       }
     }
 
-    // ✅ Button Interactions
+    // ✅ Button Interactions (safe + synced with DB)
     if (interaction.isButton()) {
       const [action, ip] = interaction.customId.split("_");
+      const existing = await BlockedIP.findOne({ ip });
 
       if (action === "block") {
-        await BlockedIP.findOneAndUpdate(
-          { ip },
-          { ip, reason: "Blocked via Discord button", blockedAt: new Date() },
-          { upsert: true, new: true }
-        );
+        if (existing) {
+          await interaction.update({
+            content: `⚠️ IP **${ip}** was already blocked.`,
+            components: [
+              new ActionRowBuilder().addComponents(
+                new ButtonBuilder().setCustomId(`unblock_${ip}`).setLabel("Unblock").setStyle(ButtonStyle.Success)
+              ),
+            ],
+          });
+          return;
+        }
 
+        await BlockedIP.create({ ip, reason: "Blocked via Discord button", blockedAt: new Date() });
         await Incident.create({
           user: interaction.user.tag,
           ip,
@@ -142,16 +150,25 @@ client.on("interactionCreate", async (interaction) => {
           content: `🚫 IP **${ip}** blocked via button.`,
           components: [
             new ActionRowBuilder().addComponents(
-              new ButtonBuilder()
-                .setCustomId(`unblock_${ip}`)
-                .setLabel("Unblock")
-                .setStyle(ButtonStyle.Success)
-            )
+              new ButtonBuilder().setCustomId(`unblock_${ip}`).setLabel("Unblock").setStyle(ButtonStyle.Success)
+            ),
           ],
         });
       }
 
       if (action === "unblock") {
+        if (!existing) {
+          await interaction.update({
+            content: `⚠️ IP **${ip}** was already unblocked.`,
+            components: [
+              new ActionRowBuilder().addComponents(
+                new ButtonBuilder().setCustomId(`block_${ip}`).setLabel("Block").setStyle(ButtonStyle.Danger)
+              ),
+            ],
+          });
+          return;
+        }
+
         await BlockedIP.findOneAndDelete({ ip });
         await Incident.create({
           user: interaction.user.tag,
@@ -166,21 +183,18 @@ client.on("interactionCreate", async (interaction) => {
           content: `✅ IP **${ip}** unblocked via button.`,
           components: [
             new ActionRowBuilder().addComponents(
-              new ButtonBuilder()
-                .setCustomId(`block_${ip}`)
-                .setLabel("Block")
-                .setStyle(ButtonStyle.Danger)
-            )
+              new ButtonBuilder().setCustomId(`block_${ip}`).setLabel("Block").setStyle(ButtonStyle.Danger)
+            ),
           ],
         });
       }
     }
   } catch (err) {
     console.error("❌ Interaction error:", err);
-    if (interaction.replied || interaction.deferred) {
-      await interaction.followUp({ content: "⚠️ Something went wrong.", ephemeral: true });
-    } else {
+    if (!interaction.replied && !interaction.deferred) {
       await interaction.reply({ content: "⚠️ Something went wrong.", ephemeral: true });
+    } else {
+      await interaction.followUp({ content: "⚠️ Something went wrong.", ephemeral: true });
     }
   }
 });
@@ -194,12 +208,8 @@ async function sendAlertMessage(user, ip) {
       return;
     }
 
-    // ✅ Start with only "Block" button
     const row = new ActionRowBuilder().addComponents(
-      new ButtonBuilder()
-        .setCustomId(`block_${ip}`)
-        .setLabel("Block IP")
-        .setStyle(ButtonStyle.Danger)
+      new ButtonBuilder().setCustomId(`block_${ip}`).setLabel("Block IP").setStyle(ButtonStyle.Danger)
     );
 
     await channel.send({
