@@ -4,8 +4,8 @@ const {
   Client, GatewayIntentBits, REST, Routes, 
   SlashCommandBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle 
 } = require("discord.js");
-const BlockedIP = require("./models/BlockedIP");  // 👈 fixed path
-const Incident = require("./models/Incident");    // 👈 fixed path
+const BlockedIP = require("./models/BlockedIP");   // 👈 fixed path
+const Incident = require("./models/Incident");     // 👈 fixed path
 
 // ---- 1. Setup Bot ----
 const client = new Client({
@@ -125,5 +125,19 @@ client.on("interactionCreate", async (interaction) => {
   }
 });
 
-// ---- Export client for index.js ----
-module.exports = client;
+// ---- 4. Utility: Send Alerts to Discord ----
+async function sendAlertMessage(message) {
+  try {
+    const channel = await client.channels.fetch(process.env.DISCORD_ALERT_CHANNEL_ID);
+    if (channel) {
+      await channel.send(message);
+    } else {
+      console.error("❌ Alert channel not found (check DISCORD_ALERT_CHANNEL_ID)");
+    }
+  } catch (err) {
+    console.error("❌ Failed to send alert:", err);
+  }
+}
+
+// ---- Export client + sendAlertMessage ----
+module.exports = { client, sendAlertMessage };

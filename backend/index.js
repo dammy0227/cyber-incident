@@ -3,7 +3,7 @@ const express = require("express");
 const cors = require("cors");
 const dotenv = require("dotenv");
 const connectDB = require("./config/db");
-const client = require("./discordBot"); // 👈 import bot client
+const { client } = require("./discordBot");
 
 // Load environment variables
 dotenv.config();
