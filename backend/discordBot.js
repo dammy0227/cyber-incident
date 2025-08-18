@@ -4,8 +4,8 @@ const {
   Client, GatewayIntentBits, REST, Routes, 
   SlashCommandBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle 
 } = require("discord.js");
-const BlockedIP = require("./models/BlockedIP");   // 👈 fixed path
-const Incident = require("./models/Incident");     // 👈 fixed path
+const BlockedIP = require("./models/BlockedIP");   // fixed path
+const Incident = require("./models/Incident");     // fixed path
 
 // ---- 1. Setup Bot ----
 const client = new Client({
@@ -70,7 +70,7 @@ client.on("interactionCreate", async (interaction) => {
           new ButtonBuilder()
             .setCustomId(`unblock_${ip}`)
             .setLabel("Unblock")
-            .setStyle(ButtonStyle.Danger)
+            .setStyle(ButtonStyle.Success)
         );
 
         await interaction.reply({
@@ -97,23 +97,42 @@ client.on("interactionCreate", async (interaction) => {
     }
 
     // ✅ Button Interactions
-    if (interaction.isButton() && interaction.customId.startsWith("unblock_")) {
-      const ip = interaction.customId.split("_")[1];
+    if (interaction.isButton()) {
+      const [action, ip] = interaction.customId.split("_");
 
-      await BlockedIP.findOneAndDelete({ ip });
-      await Incident.create({
-        user: interaction.user.tag,
-        ip,
-        type: "admin_unblock",
-        reason: "Unblocked via Discord button",
-        severity: "low",
-        threat: false,
-      });
+      if (action === "block") {
+        await BlockedIP.create({ ip, reason: "Blocked via Discord button" });
+        await Incident.create({
+          user: interaction.user.tag,
+          ip,
+          type: "admin_block",
+          reason: "Blocked via Discord button",
+          severity: "high",
+          threat: true,
+        });
 
-      await interaction.update({
-        content: `✅ IP **${ip}** unblocked via button.`,
-        components: [],
-      });
+        await interaction.update({
+          content: `🚫 IP **${ip}** blocked via button.`,
+          components: [],
+        });
+      }
+
+      if (action === "unblock") {
+        await BlockedIP.findOneAndDelete({ ip });
+        await Incident.create({
+          user: interaction.user.tag,
+          ip,
+          type: "admin_unblock",
+          reason: "Unblocked via Discord button",
+          severity: "low",
+          threat: false,
+        });
+
+        await interaction.update({
+          content: `✅ IP **${ip}** unblocked via button.`,
+          components: [],
+        });
+      }
     }
   } catch (err) {
     console.error("❌ Interaction error:", err);
@@ -126,14 +145,29 @@ client.on("interactionCreate", async (interaction) => {
 });
 
 // ---- 4. Utility: Send Alerts to Discord ----
-async function sendAlertMessage(message) {
+async function sendAlertMessage(user, ip) {
   try {
     const channel = await client.channels.fetch(process.env.DISCORD_ALERT_CHANNEL_ID);
-    if (channel) {
-      await channel.send(message);
-    } else {
+    if (!channel) {
       console.error("❌ Alert channel not found (check DISCORD_ALERT_CHANNEL_ID)");
+      return;
     }
+
+    const row = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId(`block_${ip}`)
+        .setLabel("Block IP")
+        .setStyle(ButtonStyle.Danger),
+      new ButtonBuilder()
+        .setCustomId(`unblock_${ip}`)
+        .setLabel("Unblock IP")
+        .setStyle(ButtonStyle.Success)
+    );
+
+    await channel.send({
+      content: `⚠️ Suspicious login detected!\n👤 User: **${user}**\n🌐 IP: **${ip}**`,
+      components: [row],
+    });
   } catch (err) {
     console.error("❌ Failed to send alert:", err);
   }
