@@ -6,8 +6,8 @@ const {
 } = require("discord.js");
 
 // ✅ Correct model paths
-const BlockedIP = require("../models/BlockedIP");
-const Incident = require("../models/Incident");
+const BlockedIP = require("./models/BlockedIP");
+const Incident = require("./models/Incident");
 
 // ---- 1. Setup Bot ----
 const client = new Client({
