@@ -4,12 +4,18 @@ const {
   Client, GatewayIntentBits, REST, Routes, 
   SlashCommandBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle 
 } = require("discord.js");
-const BlockedIP = require("./models/BlockedIP");   // adjust path if needed
-const Incident = require("./models/Incident");     // adjust path if needed
+
+// ✅ FIX: Correct model paths
+const BlockedIP = require("./models/BlockedIP");
+const Incident = require("./models/Incident");
 
 // ---- 1. Setup Bot ----
 const client = new Client({
-  intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages],
+  intents: [
+    GatewayIntentBits.Guilds,
+    GatewayIntentBits.GuildMessages,
+    GatewayIntentBits.MessageContent,   // ✅ Needed for interactions
+  ],
 });
 
 // ---- 2. Register Slash Commands ----
@@ -70,7 +76,7 @@ client.on("interactionCreate", async (interaction) => {
           threat: true,
         });
 
-        // Add Unblock button
+        // Show only UNBLOCK after block
         const row = new ActionRowBuilder().addComponents(
           new ButtonBuilder()
             .setCustomId(`unblock_${ip}`)
@@ -97,7 +103,18 @@ client.on("interactionCreate", async (interaction) => {
           threat: false,
         });
 
-        await interaction.reply(`✅ IP **${ip}** unblocked.`);
+        // Show only BLOCK after unblock
+        const row = new ActionRowBuilder().addComponents(
+          new ButtonBuilder()
+            .setCustomId(`block_${ip}`)
+            .setLabel("Block")
+            .setStyle(ButtonStyle.Danger)
+        );
+
+        await interaction.reply({
+          content: `✅ IP **${ip}** unblocked.`,
+          components: [row],
+        });
       }
     }
 
@@ -177,15 +194,12 @@ async function sendAlertMessage(user, ip) {
       return;
     }
 
+    // ✅ Start with only "Block" button
     const row = new ActionRowBuilder().addComponents(
       new ButtonBuilder()
         .setCustomId(`block_${ip}`)
         .setLabel("Block IP")
-        .setStyle(ButtonStyle.Danger),
-      new ButtonBuilder()
-        .setCustomId(`unblock_${ip}`)
-        .setLabel("Unblock IP")
-        .setStyle(ButtonStyle.Success)
+        .setStyle(ButtonStyle.Danger)
     );
 
     await channel.send({
