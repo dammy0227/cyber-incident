@@ -55,6 +55,9 @@ async function registerCommands() {
 // Message Tracking
 const MessageMap = new Map();
 
+// Interaction State Tracking
+const activeInteractions = new Set();
+
 // Helper function to create IP status message
 function createIPMessage(ip, isBlocked, source = "command", reason = "") {
   const status = isBlocked ? "🚫 BLOCKED" : "✅ UNBLOCKED";
@@ -77,6 +80,26 @@ function createIPMessage(ip, isBlocked, source = "command", reason = "") {
   return { content, components: [row] };
 }
 
+// Safe interaction reply wrapper
+async function safeReply(interaction, options) {
+  if (activeInteractions.has(interaction.id)) {
+    console.warn(`Duplicate interaction detected: ${interaction.id}`);
+    return;
+  }
+
+  activeInteractions.add(interaction.id);
+  try {
+    if (interaction.replied || interaction.deferred) {
+      return await interaction.followUp(options);
+    }
+    return await interaction.reply(options);
+  } catch (error) {
+    console.error("Interaction reply error:", error);
+  } finally {
+    activeInteractions.delete(interaction.id);
+  }
+}
+
 // Interaction Handlers
 async function handleBlockCommand(interaction) {
   const ip = interaction.options.getString("ip");
@@ -84,7 +107,7 @@ async function handleBlockCommand(interaction) {
 
   // Validate IP format
   if (!/^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$/.test(ip)) {
-    return interaction.reply({
+    return safeReply(interaction, {
       content: "⚠️ Invalid IP address format. Please use format like 1.1.1.1",
       ephemeral: true
     });
@@ -105,7 +128,7 @@ async function handleBlockCommand(interaction) {
     threat: true,
   });
 
-  return interaction.reply({
+  return safeReply(interaction, {
     ...createIPMessage(ip, true, "command", reason),
     flags: 64 // Ephemeral response
   });
@@ -116,7 +139,7 @@ async function handleUnblockCommand(interaction) {
 
   const exists = await BlockedIP.findOne({ ip });
   if (!exists) {
-    return interaction.reply({
+    return safeReply(interaction, {
       content: `⚠️ IP **${ip}** was not blocked.`,
       ephemeral: true
     });
@@ -132,7 +155,7 @@ async function handleUnblockCommand(interaction) {
     threat: false,
   });
 
-  return interaction.reply({
+  return safeReply(interaction, {
     ...createIPMessage(ip, false, "command"),
     flags: 64
   });
@@ -141,9 +164,18 @@ async function handleUnblockCommand(interaction) {
 async function handleButtonInteraction(interaction) {
   if (!interaction.isButton()) return;
 
+  // Check if already processing this interaction
+  if (activeInteractions.has(interaction.id)) {
+    console.warn(`Duplicate button interaction: ${interaction.id}`);
+    return;
+  }
+  activeInteractions.add(interaction.id);
+
   try {
-    // Immediately acknowledge the interaction
-    await interaction.deferUpdate();
+    // Defer the reply if not already done
+    if (!interaction.deferred && !interaction.replied) {
+      await interaction.deferUpdate();
+    }
 
     const [action, ip] = interaction.customId.split("_");
     console.log(`Processing ${action} for IP: ${ip}`);
@@ -183,13 +215,16 @@ async function handleButtonInteraction(interaction) {
   } catch (error) {
     console.error("Button interaction error:", error);
     try {
-      await interaction.followUp({
+      // Use our safe reply wrapper for error messages
+      await safeReply(interaction, {
         content: "⚠️ Failed to process button click",
         ephemeral: true
       });
     } catch (err) {
       console.error("Failed to send error follow-up:", err);
     }
+  } finally {
+    activeInteractions.delete(interaction.id);
   }
 }
 
@@ -207,17 +242,10 @@ client.on("interactionCreate", async (interaction) => {
   } catch (err) {
     console.error("❌ Interaction error:", err);
     try {
-      if (interaction.deferred || interaction.replied) {
-        await interaction.followUp({ 
-          content: "⚠️ Something went wrong.", 
-          flags: 64 
-        });
-      } else {
-        await interaction.reply({ 
-          content: "⚠️ Something went wrong.", 
-          flags: 64 
-        });
-      }
+      await safeReply(interaction, { 
+        content: "⚠️ Something went wrong.", 
+        flags: 64 
+      });
     } catch (error) {
       console.error("❌ Failed to send error response:", error);
     }
