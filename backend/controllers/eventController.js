@@ -5,7 +5,7 @@ const TrustedIP = require("../models/TrustedIP");
 const analyzeEvent = require("../ai/aiEngine");
 
 // ✅ Import Discord functions
-const { sendAlertMessage, updateDiscordMessage } = require("../discordBot");
+const { sendAlertMessage, updateDiscordMessage } = require("../bot/discordBot");
 
 // ------------------- Helpers -------------------
 
