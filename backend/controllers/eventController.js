@@ -3,32 +3,23 @@ const Incident = require("../models/Incident");
 const BlockedIP = require("../models/BlockedIP");
 const TrustedIP = require("../models/TrustedIP");
 const analyzeEvent = require("../ai/aiEngine");
-
-// ✅ Import Discord functions
 const { sendAlertMessage, updateDiscordMessage } = require("../bot/discordBot");
 
-// ------------------- Helpers -------------------
-
-// ✅ Centralized IP helper
+// Centralized IP helper
 const getIP = (req) => {
   try {
     const xForwardedFor = req.headers["x-forwarded-for"];
-    let ip = xForwardedFor ? xForwardedFor.split(",")[0].trim() : req.ip;
-
-    if (!ip || ip === "::1" || ip.startsWith("127.") || ip === "unknown") {
-      return "localhost";
-    }
-    return ip;
+    return xForwardedFor ? xForwardedFor.split(",")[0].trim() : req.ip || "localhost";
   } catch (err) {
     console.error("Error extracting IP:", err);
     return "localhost";
   }
 };
 
-// ✅ Shared incident processor
+// Shared incident processor
 async function processIncident(user, ip, type, details) {
   const result = await analyzeEvent({ user, ip, type, ...details });
-
+  
   const incident = await Incident.create({
     user,
     ip,
@@ -36,56 +27,58 @@ async function processIncident(user, ip, type, details) {
     reason: result.reason || `${type} event`,
     severity: result.severity || "low",
     threat: Boolean(result.threat),
-    file: details.file,
-    roleChange: details.roleChange,
+    ...details
   });
 
-  // Auto-block if needed
   if (result.threat && result.severity === "high") {
-    const blocked = await BlockedIP.findOne({ ip });
-    if (!blocked) {
-      await BlockedIP.create({ ip, reason: result.reason });
-    }
+    await BlockedIP.findOneAndUpdate(
+      { ip },
+      { ip, reason: result.reason },
+      { upsert: true }
+    );
   }
 
   return { result, incident };
 }
 
-// ------------------- Handlers -------------------
+// Enhanced alert message sender
+async function sendEnhancedAlert(type, user, ip, additionalInfo = "") {
+  const messages = {
+    login: `🔐 **Login attempt**\n👤 User: ${user}\n🌐 IP: ${ip}`,
+    upload: `📁 **File upload**\n👤 User: ${user}\n🌐 IP: ${ip}\n📄 File: ${additionalInfo}`,
+    role_change: `⚙️ **Role change**\n👤 User: ${user}\n🌐 IP: ${ip}\n🔄 ${additionalInfo}`,
+    blocked: `⛔ **Blocked activity**\n👤 User: ${user}\n🌐 IP: ${ip}`
+  };
 
-// ---- LOGIN ----
+  await sendAlertMessage(messages[type] + (additionalInfo ? `\n${additionalInfo}` : ''), ip);
+}
+
+// Handlers
 exports.handleLogin = async (req, res) => {
-  const { user } = req.body;
-  const ip = getIP(req);
-
-  if (!user) return res.status(400).json({ error: "User email required" });
-
   try {
-    // Check if IP or user blocked
+    const { user } = req.body;
+    const ip = getIP(req);
+    if (!user) return res.status(400).json({ error: "User email required" });
+
     const blocked = await BlockedIP.findOne({ $or: [{ ip }, { user }] });
     if (blocked) {
-      await sendAlertMessage(
-        `⛔ **Blocked login attempt**\nUser: ${user}\nIP: ${ip}\nReason: ${blocked.reason || "Blocked by admin"}`
-      );
+      await sendEnhancedAlert('blocked', user, ip, `Reason: ${blocked.reason}`);
       return res.status(403).json({ message: "Login denied", ip, reason: blocked.reason });
     }
 
-    // Analyze login
     const { result } = await processIncident(user, ip, "login", {});
-    await sendAlertMessage(
-      `🔐 **Login attempt**\nUser: ${user}\nIP: ${ip}\nThreat: ${result.threat}\nReason: ${result.reason}`
-    );
+    await sendEnhancedAlert('login', user, ip, `Threat: ${result.threat}\nReason: ${result.reason}`);
 
     if (result.threat && result.severity === "high") {
       return res.status(403).json({ message: "Suspicious login", ip, reason: result.reason });
     }
 
-    res.json({
+    res.json({ 
       message: result.threat ? "Suspicious login" : "Login successful",
       threat: result.threat,
       severity: result.severity,
       reason: result.reason,
-      ip,
+      ip
     });
   } catch (err) {
     console.error("Login handler error:", err);
@@ -93,48 +86,36 @@ exports.handleLogin = async (req, res) => {
   }
 };
 
-// ---- UPLOAD ----
 exports.handleUpload = async (req, res) => {
-  const { user } = req.body;
-  const ip = getIP(req);
-  const file = req.file;
-
-  if (!user || !file) return res.status(400).json({ error: "User and file required" });
-
   try {
-    // Check trusted IP
+    const { user } = req.body;
+    const ip = getIP(req);
+    const file = req.file;
+    if (!user || !file) return res.status(400).json({ error: "User and file required" });
+
     const trusted = await TrustedIP.findOne({ user, ip });
     if (trusted) {
       await Incident.create({
-        user,
-        ip,
+        user, ip,
         type: "upload",
-        reason: "Trusted IP upload - bypass AI",
+        reason: "Trusted IP upload",
         severity: "low",
         threat: false,
-        file: { name: file.originalname, size: file.size },
+        file: { name: file.originalname, size: file.size }
       });
-
-      await sendAlertMessage(
-        `📁 **Trusted upload**\nUser: ${user}\nIP: ${ip}\nFile: ${file.originalname} (${file.size} bytes)`
-      );
-
+      await sendEnhancedAlert('upload', user, ip, `${file.originalname} (${file.size} bytes)`);
       return res.json({ message: "File uploaded (trusted)" });
     }
 
-    // Analyze file upload
     const { result } = await processIncident(user, ip, "upload", {
-      file: { name: file.originalname, size: file.size },
+      file: { name: file.originalname, size: file.size }
     });
-
-    await sendAlertMessage(
-      `📁 **File upload**\nUser: ${user}\nIP: ${ip}\nFile: ${file.originalname} (${file.size} bytes)\nThreat: ${result.threat}\nReason: ${result.reason}`
-    );
+    await sendEnhancedAlert('upload', user, ip, 
+      `${file.originalname}\nThreat: ${result.threat}\nReason: ${result.reason}`);
 
     if (result.threat) {
       return res.status(403).json({ message: result.reason, severity: result.severity });
     }
-
     res.json({ message: "File uploaded successfully" });
   } catch (err) {
     console.error("Upload handler error:", err);
@@ -142,28 +123,23 @@ exports.handleUpload = async (req, res) => {
   }
 };
 
-// ---- ROLE CHANGE ----
 exports.handleRoleChange = async (req, res) => {
-  const { user, oldRole, newRole } = req.body;
-  const ip = getIP(req);
-
-  if (!user || !oldRole || !newRole) {
-    return res.status(400).json({ error: "Missing role change info" });
-  }
-
   try {
-    const { result } = await processIncident(user, ip, "role_change", {
-      roleChange: { oldRole, newRole },
-    });
+    const { user, oldRole, newRole } = req.body;
+    const ip = getIP(req);
+    if (!user || !oldRole || !newRole) {
+      return res.status(400).json({ error: "Missing role change info" });
+    }
 
-    await sendAlertMessage(
-      `⚙️ **Role change**\nUser: ${user}\nIP: ${ip}\nFrom: ${oldRole} → ${newRole}\nThreat: ${result.threat}\nReason: ${result.reason}`
-    );
+    const { result } = await processIncident(user, ip, "role_change", {
+      roleChange: { oldRole, newRole }
+    });
+    await sendEnhancedAlert('role_change', user, ip, 
+      `From: ${oldRole} → ${newRole}\nThreat: ${result.threat}\nReason: ${result.reason}`);
 
     if (result.threat) {
       return res.status(403).json({ message: result.reason, severity: result.severity });
     }
-
     res.json({ message: "Role changed successfully" });
   } catch (err) {
     console.error("Role change handler error:", err);
@@ -171,7 +147,6 @@ exports.handleRoleChange = async (req, res) => {
   }
 };
 
-// ---- BLOCK IP ----
 exports.blockIP = async (req, res) => {
   try {
     const { ip, reason } = req.body;
@@ -180,7 +155,7 @@ exports.blockIP = async (req, res) => {
     await BlockedIP.findOneAndUpdate(
       { ip },
       { ip, reason: reason || "Blocked via dashboard", blockedAt: new Date() },
-      { upsert: true, new: true }
+      { upsert: true }
     );
 
     await Incident.create({
@@ -192,23 +167,20 @@ exports.blockIP = async (req, res) => {
       threat: true,
     });
 
-    await updateDiscordMessage(ip, "block");
-
-    res.json({ success: true, message: `🚫 IP ${ip} blocked.` });
+    await updateDiscordMessage(ip, "block", reason);
+    res.json({ success: true, message: `🚫 IP ${ip} blocked` });
   } catch (err) {
-    console.error("❌ blockIP error:", err);
+    console.error("blockIP error:", err);
     res.status(500).json({ message: "Server error" });
   }
 };
 
-// ---- UNBLOCK IP ----
 exports.unblockIP = async (req, res) => {
   try {
     const { ip } = req.body;
     if (!ip) return res.status(400).json({ message: "IP is required" });
 
     await BlockedIP.findOneAndDelete({ ip });
-
     await Incident.create({
       user: req.user?.username || "Dashboard Admin",
       ip,
@@ -219,10 +191,9 @@ exports.unblockIP = async (req, res) => {
     });
 
     await updateDiscordMessage(ip, "unblock");
-
-    res.json({ success: true, message: `✅ IP ${ip} unblocked.` });
+    res.json({ success: true, message: `✅ IP ${ip} unblocked` });
   } catch (err) {
-    console.error("❌ unblockIP error:", err);
+    console.error("unblockIP error:", err);
     res.status(500).json({ message: "Server error" });
   }
 };
