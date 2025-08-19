@@ -1,15 +1,14 @@
-// backend/bot/discordBot.js
 require("dotenv").config();
 const {
   Client, GatewayIntentBits, REST, Routes,
   SlashCommandBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle
 } = require("discord.js");
 
-// ✅ Models
+// Models
 const BlockedIP = require("../models/BlockedIP");
 const Incident = require("../models/Incident");
 
-// ---- 1. Setup Bot ----
+// Bot Setup
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
@@ -18,7 +17,7 @@ const client = new Client({
   ],
 });
 
-// ---- 2. Slash Commands ----
+// Command Definitions
 const commands = [
   new SlashCommandBuilder()
     .setName("block")
@@ -39,8 +38,8 @@ const commands = [
 
 const rest = new REST({ version: "10" }).setToken(process.env.DISCORD_BOT_TOKEN);
 
-// ---- 3. Register Commands ----
-(async () => {
+// Command Registration
+async function registerCommands() {
   try {
     console.log("⏳ Registering Discord slash commands...");
     await rest.put(
@@ -51,143 +50,178 @@ const rest = new REST({ version: "10" }).setToken(process.env.DISCORD_BOT_TOKEN)
   } catch (err) {
     console.error("❌ Failed to register commands:", err);
   }
-})();
+}
 
-// ---- 4. Message Tracking ----
-const MessageMap = new Map(); // IP -> messageId
+// Message Tracking
+const MessageMap = new Map();
 
-// ---- 5. Handle Interactions ----
+// Interaction Handlers
+async function handleBlockCommand(interaction) {
+  const ip = interaction.options.getString("ip");
+  const reason = interaction.options.getString("reason") || "Blocked via Discord";
+
+  await BlockedIP.findOneAndUpdate(
+    { ip },
+    { ip, reason, blockedAt: new Date() },
+    { upsert: true, new: true }
+  );
+
+  await Incident.create({
+    user: interaction.user.tag,
+    ip,
+    type: "admin_block",
+    reason,
+    severity: "high",
+    threat: true,
+  });
+
+  const row = new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId(`unblock_${ip}`)
+      .setLabel("Unblock")
+      .setStyle(ButtonStyle.Success)
+  );
+
+  return interaction.reply({
+    content: `🚫 IP **${ip}** blocked.\nReason: ${reason}`,
+    components: [row],
+    flags: 64 // Ephemeral response
+  });
+}
+
+async function handleUnblockCommand(interaction) {
+  const ip = interaction.options.getString("ip");
+
+  await BlockedIP.findOneAndDelete({ ip });
+  await Incident.create({
+    user: interaction.user.tag,
+    ip,
+    type: "admin_unblock",
+    reason: "Unblocked via Discord",
+    severity: "low",
+    threat: false,
+  });
+
+  const row = new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId(`block_${ip}`)
+      .setLabel("Block")
+      .setStyle(ButtonStyle.Danger)
+  );
+
+  return interaction.reply({
+    content: `✅ IP **${ip}** unblocked.`,
+    components: [row],
+    flags: 64
+  });
+}
+
+async function handleButtonInteraction(interaction) {
+  const [action, ip] = interaction.customId.split("_");
+
+  // Defer the reply immediately
+  await interaction.deferUpdate();
+
+  if (action === "block") {
+    await BlockedIP.findOneAndUpdate(
+      { ip },
+      { ip, reason: "Blocked via Discord button", blockedAt: new Date() },
+      { upsert: true, new: true }
+    );
+
+    await Incident.create({
+      user: interaction.user.tag,
+      ip,
+      type: "admin_block",
+      reason: "Blocked via Discord button",
+      severity: "high",
+      threat: true,
+    });
+
+    return interaction.editReply({
+      content: `🚫 IP **${ip}** blocked via button.`,
+      components: [
+        new ActionRowBuilder().addComponents(
+          new ButtonBuilder()
+            .setCustomId(`unblock_${ip}`)
+            .setLabel("Unblock")
+            .setStyle(ButtonStyle.Success)
+        )
+      ]
+    });
+  }
+
+  if (action === "unblock") {
+    await BlockedIP.findOneAndDelete({ ip });
+    await Incident.create({
+      user: interaction.user.tag,
+      ip,
+      type: "admin_unblock",
+      reason: "Unblocked via Discord button",
+      severity: "low",
+      threat: false,
+    });
+
+    return interaction.editReply({
+      content: `✅ IP **${ip}** unblocked via button.`,
+      components: [
+        new ActionRowBuilder().addComponents(
+          new ButtonBuilder()
+            .setCustomId(`block_${ip}`)
+            .setLabel("Block")
+            .setStyle(ButtonStyle.Danger)
+        )
+      ]
+    });
+  }
+}
+
+// Main Interaction Handler
 client.on("interactionCreate", async (interaction) => {
   try {
-    // ✅ Slash Commands
     if (interaction.isChatInputCommand()) {
-      if (interaction.commandName === "block") {
-        const ip = interaction.options.getString("ip");
-        const reason = interaction.options.getString("reason") || "Blocked via Discord";
-
-        await BlockedIP.findOneAndUpdate(
-          { ip },
-          { ip, reason, blockedAt: new Date() },
-          { upsert: true, new: true }
-        );
-
-        await Incident.create({
-          user: interaction.user.tag,
-          ip,
-          type: "admin_block",
-          reason,
-          severity: "high",
-          threat: true,
-        });
-
-        const row = new ActionRowBuilder().addComponents(
-          new ButtonBuilder().setCustomId(`unblock_${ip}`).setLabel("Unblock").setStyle(ButtonStyle.Success)
-        );
-
-        await interaction.reply({
-          content: `🚫 IP **${ip}** blocked.\nReason: ${reason}`,
-          components: [row],
-        });
-      }
-
-      if (interaction.commandName === "unblock") {
-        const ip = interaction.options.getString("ip");
-
-        await BlockedIP.findOneAndDelete({ ip });
-        await Incident.create({
-          user: interaction.user.tag,
-          ip,
-          type: "admin_unblock",
-          reason: "Unblocked via Discord",
-          severity: "low",
-          threat: false,
-        });
-
-        const row = new ActionRowBuilder().addComponents(
-          new ButtonBuilder().setCustomId(`block_${ip}`).setLabel("Block").setStyle(ButtonStyle.Danger)
-        );
-
-        await interaction.reply({
-          content: `✅ IP **${ip}** unblocked.`,
-          components: [row],
-        });
-      }
+      if (interaction.commandName === "block") return handleBlockCommand(interaction);
+      if (interaction.commandName === "unblock") return handleUnblockCommand(interaction);
     }
 
-    // ✅ Button Interactions
     if (interaction.isButton()) {
-      const [action, ip] = interaction.customId.split("_");
-
-      if (action === "block") {
-        await BlockedIP.findOneAndUpdate(
-          { ip },
-          { ip, reason: "Blocked via Discord button", blockedAt: new Date() },
-          { upsert: true, new: true }
-        );
-
-        await Incident.create({
-          user: interaction.user.tag,
-          ip,
-          type: "admin_block",
-          reason: "Blocked via Discord button",
-          severity: "high",
-          threat: true,
-        });
-
-        await interaction.update({
-          content: `🚫 IP **${ip}** blocked via button.`,
-          components: [
-            new ActionRowBuilder().addComponents(
-              new ButtonBuilder().setCustomId(`unblock_${ip}`).setLabel("Unblock").setStyle(ButtonStyle.Success)
-            )
-          ],
-        });
-      }
-
-      if (action === "unblock") {
-        await BlockedIP.findOneAndDelete({ ip });
-        await Incident.create({
-          user: interaction.user.tag,
-          ip,
-          type: "admin_unblock",
-          reason: "Unblocked via Discord button",
-          severity: "low",
-          threat: false,
-        });
-
-        await interaction.update({
-          content: `✅ IP **${ip}** unblocked via button.`,
-          components: [
-            new ActionRowBuilder().addComponents(
-              new ButtonBuilder().setCustomId(`block_${ip}`).setLabel("Block").setStyle(ButtonStyle.Danger)
-            )
-          ],
-        });
-      }
+      return handleButtonInteraction(interaction);
     }
   } catch (err) {
     console.error("❌ Interaction error:", err);
 
-    // ✅ Make sure only one reply happens
-    if (!interaction.replied && !interaction.deferred) {
-      await interaction.reply({ content: "⚠️ Something went wrong.", ephemeral: true });
-    } else {
-      await interaction.followUp({ content: "⚠️ Something went wrong.", ephemeral: true });
+    try {
+      if (interaction.deferred || interaction.replied) {
+        await interaction.followUp({ 
+          content: "⚠️ Something went wrong.", 
+          flags: 64 
+        });
+      } else {
+        await interaction.reply({ 
+          content: "⚠️ Something went wrong.", 
+          flags: 64 
+        });
+      }
+    } catch (error) {
+      console.error("❌ Failed to send error response:", error);
     }
   }
 });
 
-// ---- 6. Utility: Send Alerts ----
+// Alert Message Utility
 async function sendAlertMessage(user, ip) {
   try {
     const channel = await client.channels.fetch(process.env.DISCORD_ALERT_CHANNEL_ID);
     if (!channel) {
-      console.error("❌ Alert channel not found (check DISCORD_ALERT_CHANNEL_ID)");
+      console.error("❌ Alert channel not found");
       return;
     }
 
     const row = new ActionRowBuilder().addComponents(
-      new ButtonBuilder().setCustomId(`block_${ip}`).setLabel("Block IP").setStyle(ButtonStyle.Danger)
+      new ButtonBuilder()
+        .setCustomId(`block_${ip}`)
+        .setLabel("Block IP")
+        .setStyle(ButtonStyle.Danger)
     );
 
     const sentMsg = await channel.send({
@@ -195,14 +229,13 @@ async function sendAlertMessage(user, ip) {
       components: [row],
     });
 
-    // ✅ Track messageId for updates later
     MessageMap.set(ip, sentMsg.id);
   } catch (err) {
     console.error("❌ Failed to send alert:", err);
   }
 }
 
-// ---- 7. Utility: Update Message from Dashboard ----
+// Message Update Utility
 async function updateDiscordMessage(ip, action) {
   try {
     const channel = await client.channels.fetch(process.env.DISCORD_ALERT_CHANNEL_ID);
@@ -212,22 +245,30 @@ async function updateDiscordMessage(ip, action) {
     const msg = await channel.messages.fetch(messageId);
     if (!msg) return;
 
-    let row;
-    if (action === "block") {
-      row = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId(`unblock_${ip}`).setLabel("Unblock").setStyle(ButtonStyle.Success)
-      );
-      await msg.edit({ content: `🚫 IP **${ip}** blocked (via dashboard).`, components: [row] });
-    } else {
-      row = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId(`block_${ip}`).setLabel("Block").setStyle(ButtonStyle.Danger)
-      );
-      await msg.edit({ content: `✅ IP **${ip}** unblocked (via dashboard).`, components: [row] });
-    }
+    const row = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId(`${action === "block" ? "unblock" : "block"}_${ip}`)
+        .setLabel(action === "block" ? "Unblock" : "Block")
+        .setStyle(action === "block" ? ButtonStyle.Success : ButtonStyle.Danger)
+    );
+
+    await msg.edit({
+      content: `${action === "block" ? "🚫" : "✅"} IP **${ip}** ${action}ed (via dashboard).`,
+      components: [row]
+    });
   } catch (err) {
     console.error("❌ Failed to update Discord message:", err);
   }
 }
 
-// ---- 8. Export ----
-module.exports = { client, sendAlertMessage, updateDiscordMessage };
+// Initialize
+client.once("ready", () => {
+  console.log("🤖 Discord bot logged in");
+  registerCommands();
+});
+
+module.exports = { 
+  client, 
+  sendAlertMessage, 
+  updateDiscordMessage 
+};
