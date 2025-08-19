@@ -1,11 +1,11 @@
 // backend/bot/discordBot.js
 require("dotenv").config();
-const { 
-  Client, GatewayIntentBits, REST, Routes, 
-  SlashCommandBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle 
+const {
+  Client, GatewayIntentBits, REST, Routes,
+  SlashCommandBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle
 } = require("discord.js");
 
-// ✅ Correct model paths
+// ✅ Models
 const BlockedIP = require("../models/BlockedIP");
 const Incident = require("../models/Incident");
 
@@ -167,10 +167,12 @@ client.on("interactionCreate", async (interaction) => {
     }
   } catch (err) {
     console.error("❌ Interaction error:", err);
-    if (interaction.replied || interaction.deferred) {
-      await interaction.followUp({ content: "⚠️ Something went wrong.", ephemeral: true });
-    } else {
+
+    // ✅ Make sure only one reply happens
+    if (!interaction.replied && !interaction.deferred) {
       await interaction.reply({ content: "⚠️ Something went wrong.", ephemeral: true });
+    } else {
+      await interaction.followUp({ content: "⚠️ Something went wrong.", ephemeral: true });
     }
   }
 });
@@ -229,4 +231,3 @@ async function updateDiscordMessage(ip, action) {
 
 // ---- 8. Export ----
 module.exports = { client, sendAlertMessage, updateDiscordMessage };
- 
