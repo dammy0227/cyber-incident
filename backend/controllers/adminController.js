@@ -18,18 +18,28 @@ exports.blockIP = async (req, res) => {
   const { ip, user, reason, blockedUntil } = req.body;
 
   if (!ip && !user) {
-    return res.status(400).json({ message: "IP or user email is required" });
+    return res.status(400).json({ 
+      success: false, 
+      error: "Either IP or user email is required" 
+    });
   }
 
   try {
     const exists = await BlockedIP.findOne({ $or: [{ ip }, { user }] });
-    if (exists) return res.status(400).json({ message: "Already blocked" });
+    if (exists) {
+      return res.status(400).json({ 
+        success: false, 
+        error: `${ip ? "IP" : "User"} is already blocked` 
+      });
+    }
 
-    const payload = {};
-    if (ip) payload.ip = ip;
-    if (user) payload.user = user;
-    if (reason) payload.reason = reason;
-    if (blockedUntil) payload.blockedUntil = new Date(blockedUntil);
+    const payload = { 
+      blockedBy: req.admin?.email || "system",
+      ...(ip && { ip }),
+      ...(user && { user }),
+      ...(reason && { reason }),
+      ...(blockedUntil && { blockedUntil: new Date(blockedUntil) })
+    };
 
     await BlockedIP.create(payload);
 
@@ -42,23 +52,39 @@ exports.blockIP = async (req, res) => {
       threat: true,
     });
 
-    res.json({ message: `${ip ? "IP" : "User"} blocked successfully.` });
+    res.json({ 
+      success: true, 
+      message: `${ip ? "IP" : "User"} blocked successfully`,
+      data: payload
+    });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Failed to block" });
+    console.error('Block IP error:', err);
+    res.status(500).json({ 
+      success: false, 
+      error: "Failed to block IP/user" 
+    });
   }
 };
 
+// UNBLOCK IP (combined version)
 exports.unblockIP = async (req, res) => {
   const { ip, user } = req.body;
 
   if (!ip && !user) {
-    return res.status(400).json({ message: "IP or user email is required" });
+    return res.status(400).json({ 
+      success: false, 
+      error: "Either IP or user email is required" 
+    });
   }
 
   try {
     const removed = await BlockedIP.findOneAndDelete({ $or: [{ ip }, { user }] });
-    if (!removed) return res.status(404).json({ message: "Not found" });
+    if (!removed) {
+      return res.status(404).json({ 
+        success: false, 
+        error: `${ip ? "IP" : "User"} not found in block list` 
+      });
+    }
 
     await Incident.create({
       user: req.admin?.email || "admin",
@@ -69,37 +95,19 @@ exports.unblockIP = async (req, res) => {
       threat: false,
     });
 
-    res.json({ message: `${ip ? "IP" : "User"} unblocked successfully.` });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Failed to unblock" });
-  }
-};
-
-// UNBLOCK IP
-exports.unblockIP = async (req, res) => {
-  const { ip } = req.body;
-  if (!ip) return res.status(400).json({ message: "IP is required" });
-
-  try {
-    const removed = await BlockedIP.findOneAndDelete({ ip });
-    if (!removed) return res.status(404).json({ message: "IP not found" });
-
-    await Incident.create({
-      user: req.admin?.email || "admin",
-      ip,
-      type: "admin_unblock",
-      reason: "Unblocked manually by admin",
-      severity: "low",
-      threat: false,
+    res.json({ 
+      success: true, 
+      message: `${ip ? "IP" : "User"} unblocked successfully`,
+      data: removed
     });
-
-    res.json({ message: `IP ${ip} unblocked` });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Failed to unblock IP" });
+    console.error('Unblock IP error:', err);
+    res.status(500).json({ 
+      success: false, 
+      error: "Failed to unblock IP/user" 
+    });
   }
-};
+}
 
 // GET BLOCKED IPs
 exports.getBlockedIPs = async (req, res) => {

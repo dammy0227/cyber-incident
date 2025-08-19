@@ -1,11 +1,13 @@
 import React, { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import useUser from "../../content/useUser";
 import { loginUser } from "../../api/userApi";
-import './dashboards.css';
+import './login.css';
 
 const UserLoginPage = () => {
   const { login } = useUser();
   const [inputEmail, setInputEmail] = useState("");
+  const navigate = useNavigate();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -19,16 +21,16 @@ const UserLoginPage = () => {
       const res = await loginUser(inputEmail);
       console.log("Response data:", res.data);
 
-      alert(res.data.message || "No message from server");
-
-      if (res.data.restricted) {
-        return; // Stop if restricted
+      if (res.data.blocked) {
+        alert(`🚫 You are blocked by Admin. Reason: ${res.data.reason}`);
+        return;
       }
 
       const ip = res.data.ip || "unknown";
       login(inputEmail, ip);
-      setInputEmail(""); // Clear input field
 
+      alert("✅ Login successful!");
+      navigate("/user/dashboard");
     } catch (err) {
       alert("❌ Login failed. Please try again.");
       console.error("Login error:", err);
@@ -36,19 +38,21 @@ const UserLoginPage = () => {
   };
 
   return (
-    <div className="user-login-container">
-      <h2>👤 User Login</h2>
-      <form onSubmit={handleSubmit} className="user-login-form">
-        <input
-          type="email"
-          placeholder="Your email"
-          value={inputEmail}
-          onChange={(e) => setInputEmail(e.target.value)}
-          className="login-input"
-          required
-        />
-        <button type="submit" className="login-button">Login</button>
-      </form>
+    <div className="user-login-wrapper">
+      <div className="user-login-container">
+        <h2>👤 Attacker Login</h2>
+        <form onSubmit={handleSubmit} className="user-login-form">
+          <input
+            type="email"
+            placeholder="Your email"
+            value={inputEmail}
+            onChange={(e) => setInputEmail(e.target.value)}
+            className="login-input"
+            required
+          />
+          <button type="submit" className="login-button">Login</button>
+        </form>
+      </div>
     </div>
   );
 };

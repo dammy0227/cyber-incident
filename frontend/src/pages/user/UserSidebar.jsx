@@ -1,19 +1,29 @@
+// src/components/user/UserSidebar.jsx
 import React from "react";
 import { useNavigate } from "react-router-dom";
-import { FaShieldAlt } from "react-icons/fa"; // shield icon
+import { FaSignOutAlt, FaBook } from "react-icons/fa"; // logout + book icon
+import useUser from "../../content/useUser";
+
 
 const UserSidebar = ({ activeTab, onTabChange }) => {
   const navigate = useNavigate();
+  const { logout } = useUser(); // ✅ logout from context
+
+  const handleLogout = () => {
+    logout();
+    navigate("/"); // redirect back to login (or home page)
+  };
 
   return (
     <div className="sidebar">
       <h3>User Menu</h3>
       <ul>
-        <li
-          className={activeTab === "login" ? "active" : ""}
-          onClick={() => onTabChange("login")}
+          <li
+          className={activeTab === "csinfo" ? "active" : ""}
+          onClick={() => onTabChange("csinfo")}
         >
-          👤 Login
+          <FaBook style={{ marginRight: "8px" }} />
+          Computer Science Info
         </li>
         <li
           className={activeTab === "upload" ? "active" : ""}
@@ -28,10 +38,12 @@ const UserSidebar = ({ activeTab, onTabChange }) => {
           🛠 Role Change Attack
         </li>
 
-        {/* Switch to Admin Dashboard */}
-        <li onClick={() => navigate("/admin/login")} className="switch-link">
-          <FaShieldAlt style={{ marginRight: "8px" }} />
-          Switch to Admin View
+        {/* ✅ New Computer Science Info Page */}
+
+        {/* ✅ Logout */}
+        <li onClick={handleLogout} className="logout-link">
+          <FaSignOutAlt style={{ marginRight: "8px" }} />
+          Logout
         </li>
       </ul>
     </div>

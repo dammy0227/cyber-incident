@@ -197,3 +197,20 @@ exports.unblockIP = async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 };
+
+exports.checkStatus = async (req, res) => {
+  try {
+    const ip = req.ip;
+    const user = req.query.user;
+
+    const blocked = await BlockedIP.findOne({ $or: [{ ip }, { user }] });
+    if (blocked) {
+      return res.json({ blocked: true, reason: blocked.reason });
+    }
+
+    res.json({ blocked: false });
+  } catch (err) {
+    console.error("checkStatus error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+};

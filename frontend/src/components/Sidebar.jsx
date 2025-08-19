@@ -1,10 +1,18 @@
+// src/components/admin/Sidebar.jsx
 import React from "react";
 import { useNavigate } from "react-router-dom";
-import { FaUser } from "react-icons/fa";
+import { FaSignOutAlt } from "react-icons/fa";
+import useAdmin from "../content/useAdmin"; // ✅ useAdmin hook
 import "./Sidebar.css";
 
 const Sidebar = ({ onTabChange, activeTab }) => {
   const navigate = useNavigate();
+  const { logout } = useAdmin(); // ✅ get logout from context
+
+  const handleLogout = () => {
+    logout(); // clear token + isAdmin
+    navigate("/admin/login"); // redirect to login page
+  };
 
   return (
     <div className="sidebar">
@@ -29,10 +37,10 @@ const Sidebar = ({ onTabChange, activeTab }) => {
           View Trusted IPs
         </li>
 
-        {/* Switch to User Dashboard */}
-        <li onClick={() => navigate("/")} className="switch-link">
-          <FaUser style={{ marginRight: "8px" }} />
-          Switch to User View
+        {/* ✅ Logout instead of switch */}
+        <li onClick={handleLogout} className="logout-link">
+          <FaSignOutAlt style={{ marginRight: "8px" }} />
+          Logout
         </li>
       </ul>
     </div>

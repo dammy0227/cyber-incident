@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import useAdmin from "../../content/useAdmin";
 import useAdminApi from "../../api/adminApi";
+import './AdminLoginPage.css'
 
 const AdminLoginPage = () => {
   const { loginAdmin } = useAdminApi(); 
@@ -29,7 +30,8 @@ const AdminLoginPage = () => {
     }
   };
 
-  return (
+return (
+  <div className="admin-login-wrapper">
     <div className="admin-login-container">
       <h2>🔐 Admin Login</h2>
       <form onSubmit={handleSubmit} className="admin-login-form">
@@ -52,7 +54,9 @@ const AdminLoginPage = () => {
         <button type="submit" className="login-button">Login</button>
       </form>
     </div>
-  );
+  </div>
+);
+
 };
 
 export default AdminLoginPage;

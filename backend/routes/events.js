@@ -13,5 +13,7 @@ router.use(ipExtractor);
 router.post("/login", eventController.handleLogin);
 router.post("/upload", upload.single("file"), eventController.handleUpload);
 router.post("/role-change", eventController.handleRoleChange);
+router.get("/status", eventController.checkStatus);
+
 
 module.exports = router;

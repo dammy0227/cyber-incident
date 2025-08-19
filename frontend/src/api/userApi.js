@@ -23,3 +23,11 @@ export const uploadFile = async (email, file) => {
 export const changeRole = async (email, oldRole, newRole) => {
   return axios.post(`${BASE_URL}/events/role-change`, { user: email, oldRole, newRole }, { withCredentials: true });
 };
+
+export const checkUserStatus = async (email) => {
+  return axios.get(`${BASE_URL}/events/status`, {
+    params: { user: email },
+    withCredentials: true,
+  });
+};
+

@@ -39,7 +39,6 @@ const commands = [
 ].map(cmd => cmd.toJSON());
 
 const rest = new REST({ version: "10" }).setToken(process.env.DISCORD_BOT_TOKEN);
-const activeInteractions = new Set();
 const MessageMap = new Map();
 
 // Message Creation Helper
@@ -65,93 +64,130 @@ function createIPMessage(ip, isBlocked, source = "command", reason = "") {
 
 // Interaction Handlers
 async function handleBlockCommand(interaction) {
-  const ip = interaction.options.getString("ip");
-  const reason = interaction.options.getString("reason") || "No reason provided";
+  try {
+    const ip = interaction.options.getString("ip");
+    const reason = interaction.options.getString("reason") || "No reason provided";
 
-  if (!/^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$/.test(ip)) {
-    return interaction.reply({
-      content: "⚠️ Invalid IP format (use like 1.1.1.1)",
-      ephemeral: true
-    });
-  }
+    if (!/^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$/.test(ip)) {
+      return await interaction.reply({
+        content: "⚠️ Invalid IP format (use like 1.1.1.1)",
+        ephemeral: true
+      });
+    }
 
-  await BlockedIP.findOneAndUpdate(
-    { ip },
-    { ip, reason, blockedAt: new Date() },
-    { upsert: true }
-  );
+    await interaction.deferReply();
 
-  await Incident.create({
-    user: interaction.user.tag,
-    ip,
-    type: "admin_block",
-    reason,
-    severity: "high",
-    threat: true,
-  });
-
-  return interaction.reply(createIPMessage(ip, true, "command", reason));
-}
-
-async function handleUnblockCommand(interaction) {
-  const ip = interaction.options.getString("ip");
-  const exists = await BlockedIP.findOne({ ip });
-
-  if (!exists) {
-    return interaction.reply({
-      content: `⚠️ IP **${ip}** not blocked`,
-      ephemeral: true
-    });
-  }
-
-  await BlockedIP.findOneAndDelete({ ip });
-  await Incident.create({
-    user: interaction.user.tag,
-    ip,
-    type: "admin_unblock",
-    reason: "Unblocked via Discord",
-    severity: "low",
-    threat: false,
-  });
-
-  return interaction.reply(createIPMessage(ip, false, "command"));
-}
-
-async function handleButtonInteraction(interaction) {
-  if (!interaction.isButton()) return;
-  await interaction.deferUpdate();
-
-  const [action, ip] = interaction.customId.split("_");
-  if (!ip) return;
-
-  if (action === "block") {
     await BlockedIP.findOneAndUpdate(
       { ip },
-      { ip, reason: "Blocked via button", blockedAt: new Date() },
+      { ip, reason, blockedAt: new Date() },
       { upsert: true }
     );
+
     await Incident.create({
       user: interaction.user.tag,
       ip,
       type: "admin_block",
-      reason: "Blocked via button",
+      reason,
       severity: "high",
       threat: true,
     });
-    return interaction.editReply(createIPMessage(ip, true, "button"));
-  }
 
-  if (action === "unblock") {
+    await interaction.editReply(createIPMessage(ip, true, "command", reason));
+  } catch (error) {
+    console.error("Block command error:", error);
+    if (!interaction.replied && !interaction.deferred) {
+      await interaction.reply({ content: "⚠️ Failed to process block command", ephemeral: true });
+    } else if (interaction.deferred) {
+      await interaction.editReply({ content: "⚠️ Failed to process block command" });
+    }
+  }
+}
+
+async function handleUnblockCommand(interaction) {
+  try {
+    const ip = interaction.options.getString("ip");
+    
+    await interaction.deferReply();
+
+    const exists = await BlockedIP.findOne({ ip });
+    if (!exists) {
+      return await interaction.editReply({
+        content: `⚠️ IP **${ip}** not blocked`
+      });
+    }
+
     await BlockedIP.findOneAndDelete({ ip });
     await Incident.create({
       user: interaction.user.tag,
       ip,
       type: "admin_unblock",
-      reason: "Unblocked via button",
+      reason: "Unblocked via Discord",
       severity: "low",
       threat: false,
     });
-    return interaction.editReply(createIPMessage(ip, false, "button"));
+
+    await interaction.editReply(createIPMessage(ip, false, "command"));
+  } catch (error) {
+    console.error("Unblock command error:", error);
+    if (!interaction.replied && !interaction.deferred) {
+      await interaction.reply({ content: "⚠️ Failed to process unblock command", ephemeral: true });
+    } else if (interaction.deferred) {
+      await interaction.editReply({ content: "⚠️ Failed to process unblock command" });
+    }
+  }
+}
+
+async function handleButtonInteraction(interaction) {
+  if (!interaction.isButton()) return;
+
+  try {
+    // Check if already handled
+    if (interaction.replied || interaction.deferred) {
+      return;
+    }
+
+    // Defer the interaction first
+    await interaction.deferUpdate();
+
+    const [action, ip] = interaction.customId.split("_");
+    if (!ip) return;
+
+    if (action === "block") {
+      await BlockedIP.findOneAndUpdate(
+        { ip },
+        { ip, reason: "Blocked via button", blockedAt: new Date() },
+        { upsert: true }
+      );
+      await Incident.create({
+        user: interaction.user.tag,
+        ip,
+        type: "admin_block",
+        reason: "Blocked via button",
+        severity: "high",
+        threat: true,
+      });
+      await interaction.editReply(createIPMessage(ip, true, "button"));
+      return;
+    }
+
+    if (action === "unblock") {
+      await BlockedIP.findOneAndDelete({ ip });
+      await Incident.create({
+        user: interaction.user.tag,
+        ip,
+        type: "admin_unblock",
+        reason: "Unblocked via button",
+        severity: "low",
+        threat: false,
+      });
+      await interaction.editReply(createIPMessage(ip, false, "button"));
+      return;
+    }
+  } catch (error) {
+    console.error("Button interaction error:", error);
+    if (!interaction.replied && !interaction.deferred) {
+      await interaction.reply({ content: "⚠️ Failed to process button click", ephemeral: true });
+    }
   }
 }
 
@@ -167,9 +203,9 @@ client.on("interactionCreate", async (interaction) => {
     console.error("Interaction error:", error);
     try {
       if (interaction.deferred || interaction.replied) {
-        await interaction.followUp("⚠️ Something went wrong");
+        await interaction.followUp({ content: "⚠️ Something went wrong", ephemeral: true });
       } else {
-        await interaction.reply("⚠️ Something went wrong");
+        await interaction.reply({ content: "⚠️ Something went wrong", ephemeral: true });
       }
     } catch (err) {
       console.error("Failed to send error:", err);
